@@ -129,7 +129,7 @@ const DashboardMaster = () => {
   const fetchSubs = async () => {
     try {
       setFetchLoading(true);
-      const response = await fetch(`http://localhost:3000/subs/master/${masterId}`);
+      const response = await fetch(`https://cidadeemdia.onrender.com/subs/master/${masterId}`);
       const data = await response.json();
       if (response.ok) {
         setSubs(data);
@@ -145,7 +145,7 @@ const DashboardMaster = () => {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/notifications/${masterId}`);
+      const response = await fetch(`https://cidadeemdia.onrender.com/notifications/${masterId}`);
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
@@ -176,7 +176,7 @@ const DashboardMaster = () => {
     if (postsDetails[idPost]) return; 
 
     try {
-      const response = await fetch(`http://localhost:3000/posts/${idPost}`);
+      const response = await fetch(`https://cidadeemdia.onrender.com/posts/${idPost}`);
       if (response.ok) {
         const postData = await response.json();
         setPostsDetails(prev => ({ ...prev, [idPost]: postData }));
@@ -233,8 +233,8 @@ const DashboardMaster = () => {
 
     const isEditing = editingId !== null;
     const url = isEditing 
-      ? `http://localhost:3000/subs/${editingId}` 
-      : 'http://localhost:3000/subs';
+      ? `https://cidadeemdia.onrender.com/subs/${editingId}` 
+      : 'https://cidadeemdia.onrender.com/subs';
     
     const method = isEditing ? 'PUT' : 'POST';
 
@@ -296,7 +296,7 @@ const DashboardMaster = () => {
     if (!window.confirm('Tem certeza absoluta que deseja remover esta sub-conta gerenciada?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/subs/${id}`, {
+      const response = await fetch(`https://cidadeemdia.onrender.com/subs/${id}`, {
         method: 'DELETE'
       });
       const data = await response.json();

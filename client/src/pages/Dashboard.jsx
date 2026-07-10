@@ -86,7 +86,7 @@ const Dashboard = () => {
     const delayDebounceFn = setTimeout(async () => {
       setAreasLoading(true);
       try {
-        const response = await fetch(`http://localhost:3000/areas/${encodeURIComponent(newPost.city.trim())}`);
+        const response = await fetch(`https://cidadeemdia.onrender.com/areas/${encodeURIComponent(newPost.city.trim())}`);
         if (response.ok) {
           const areas = await response.json();
           setManagedAreas(areas);
@@ -186,7 +186,7 @@ const Dashboard = () => {
 
   const fetchPosts = async () => {
     try {
-      const response = await fetch('http://localhost:3000/posts');
+      const response = await fetch('https://cidadeemdia.onrender.com/posts');
       const data = await response.json();
       if (response.ok) {
         setPosts(data);
@@ -254,7 +254,7 @@ const Dashboard = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await fetch('http://localhost:3000/posts', {
+      const response = await fetch('https://cidadeemdia.onrender.com/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -293,7 +293,7 @@ const Dashboard = () => {
     if (!window.confirm('Tem certeza que deseja remover esta ocorrência?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/posts/${id}`, {
+      const response = await fetch(`https://cidadeemdia.onrender.com/posts/${id}`, {
         method: 'DELETE'
       });
       const data = await response.json();

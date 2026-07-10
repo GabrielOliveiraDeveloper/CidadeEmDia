@@ -67,7 +67,7 @@ const RegisterForm = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/register', {
+      const response = await fetch('https://cidadeemdia.onrender.com/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
