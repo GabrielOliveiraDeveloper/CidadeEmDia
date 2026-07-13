@@ -648,35 +648,38 @@ const DashboardMaster = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {notifications.map((notification) => {
                     const post = postsDetails[notification.idPost];
-                    if (!post) return null;
 
                     return (
                       <div 
                         key={notification._id}
-                        onClick={() => setSelectedPost(post)}
-                        className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group hover:border-blue-400"
+                        onClick={() => post ? setSelectedPost(post) : alert('Os detalhes deste registro ainda estão sendo carregados...')}
+                        className={`bg-white rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all flex flex-col justify-between group ${post ? 'hover:border-blue-400 cursor-pointer' : 'opacity-75 cursor-wait'}`}
                       >
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-md border border-blue-100 uppercase tracking-wide">
-                              Protocolo: {post.protocol || 'S/N'}
+                              Protocolo: {post ? (post.protocol || 'S/N') : 'Carregando...'}
                             </span>
                             <span className="text-[9px] text-slate-400 font-mono">
                               {new Date(notification.date).toLocaleDateString('pt-BR')}
                             </span>
                           </div>
 
-                          {post.photos && (Array.isArray(post.photos) ? post.photos.length > 0 : typeof post.photos === 'string') && (
+                          {post?.photos && (Array.isArray(post.photos) ? post.photos.length > 0 : typeof post.photos === 'string') ? (
                             <div className="w-full h-28 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
                               <img src={Array.isArray(post.photos) ? post.photos[0] : post.photos} alt="Evidência Principal" className="w-full h-full object-cover" />
                             </div>
-                          )}
+                          ) : !post ? (
+                            <div className="w-full h-28 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                            </div>
+                          ) : null}
 
                           <p className="text-sm text-slate-700 font-medium line-clamp-3 leading-relaxed">
-                            {post.description}
+                            {post ? post.description : 'Buscando detalhes do relato no servidor...'}
                           </p>
 
-                          {post.managedArea && (
+                          {post?.managedArea && (
                             <div className="text-[10px] bg-slate-100 px-2 py-1 rounded border border-slate-200 inline-block font-bold text-slate-600 uppercase">
                               Setor: {post.managedArea}
                             </div>
@@ -684,8 +687,11 @@ const DashboardMaster = () => {
                         </div>
 
                         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-semibold group-hover:text-blue-600 transition-colors">
-                          <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" /> {post.city || 'Cidade N/D'}</span>
-                          <span className="text-[10px] font-bold text-blue-600 underline">Auditar com mapa →</span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" /> 
+                            {post ? (post.city || 'Cidade N/D') : 'Carregando localização...'}
+                          </span>
+                          {post && <span className="text-[10px] font-bold text-blue-600 underline">Auditar com mapa →</span>}
                         </div>
                       </div>
                     );

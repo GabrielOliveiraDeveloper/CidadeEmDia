@@ -10,7 +10,6 @@ import {
   X, 
   LogOut, 
   Shield, 
-  Settings, 
   CheckCircle2, 
   AlertCircle, 
   Loader2,
@@ -21,7 +20,6 @@ import {
 } from 'lucide-react';
 
 const DashboardSub = () => {
-  // Captura dinamicamente o ID vindo do parâmetro da URL (?id=...) ou recorre ao localStorage caso não encontre
   const getSubId = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const idFromUrl = urlParams.get('id');
@@ -32,28 +30,19 @@ const DashboardSub = () => {
 
   const subId = getSubId();
 
-  // Abas de visualização: 'subs' (Gerenciar Sub-contas) ou 'protocols' (Visualizar Protocolos das Notificações)
   const [activeTab, setActiveTab] = useState('subs');
-
-  // Estados de dados
   const [subs, setSubs] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  
-  // Estados para notificações e detalhes de posts
   const [notifications, setNotifications] = useState([]);
   const [postsDetails, setPostsDetails] = useState({}); 
   const [showNotifications, setShowNotifications] = useState(false);
   const [protocolsLoading, setProtocolsLoading] = useState(false);
-  
-  // Estado para controlar qual post está ativo visualmente em detalhes (modal com mapa)
   const [selectedPost, setSelectedPost] = useState(null);
 
-  // Referências para o Mapa Leaflet de Exibição
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const mapContainerRef = useRef(null);
 
-  // Estado do formulário de sub-conta
   const [formData, setFormData] = useState({
     tittle: '',
     email: '',
@@ -62,12 +51,10 @@ const DashboardSub = () => {
     managedArea: ''
   });
 
-  // Estados de controle da UI
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  // Injeta os scripts necessários do Leaflet dinamicamente para exibição de mapas
   useEffect(() => {
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link');
@@ -85,10 +72,8 @@ const DashboardSub = () => {
     }
   }, []);
 
-  // Inicializa ou atualiza o mapa sempre que o modal de um post selecionado abrir
   useEffect(() => {
     if (selectedPost && mapContainerRef.current && window.L) {
-      // Pequeno timeout para garantir que o contêiner do modal já renderizou no DOM
       const timer = setTimeout(() => {
         initDisplayMap();
       }, 100);
@@ -103,7 +88,6 @@ const DashboardSub = () => {
     };
   }, [selectedPost]);
 
-  // Renderiza o mapa apenas para exibição e leitura das coordenadas
   const initDisplayMap = () => {
     if (!window.L || !mapContainerRef.current) return;
     if (mapRef.current) {
@@ -112,8 +96,6 @@ const DashboardSub = () => {
     }
 
     const L = window.L;
-    
-    // Recupera as coordenadas do post ou define um padrão (São Paulo) caso venha nulo
     const lat = selectedPost.coordinates?.lat || -23.55052;
     const lng = selectedPost.coordinates?.lng || -46.633308;
 
@@ -144,7 +126,6 @@ const DashboardSub = () => {
       .openPopup();
   };
 
-  // Buscar todas as sub-contas filtradas pelo ID do Sub logado
   const fetchSubs = async () => {
     try {
       setFetchLoading(true);
@@ -162,7 +143,6 @@ const DashboardSub = () => {
     }
   };
 
-  // Buscar notificações direcionadas ao usuário logado
   const fetchNotifications = async () => {
     try {
       const response = await fetch(`https://cidadeemdia.onrender.com/notifications/${subId}`);
@@ -170,7 +150,6 @@ const DashboardSub = () => {
         const data = await response.json();
         setNotifications(data);
         
-        // Carrega os detalhes individuais em segundo plano
         data.forEach(notification => {
           if (notification.idPost) {
             fetchPostDetails(notification.idPost);
@@ -182,7 +161,6 @@ const DashboardSub = () => {
     }
   };
 
-  // Carrega a coletânea de posts baseada em todas as notificações existentes
   const fetchAllNotificationPosts = async () => {
     setProtocolsLoading(true);
     try {
@@ -194,7 +172,6 @@ const DashboardSub = () => {
     }
   };
 
-  // Buscar os detalhes específicos de um Post usando seu ID
   const fetchPostDetails = async (idPost) => {
     if (postsDetails[idPost]) return; 
 
@@ -353,8 +330,6 @@ const DashboardSub = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 antialiased font-sans">
-      
-      {/* Header Principal */}
       <header className="bg-gradient-to-r from-green-700 via-green-600 to-blue-700 text-white shadow-md relative z-50">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-yellow-400"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -370,7 +345,6 @@ const DashboardSub = () => {
           </div>
           
           <div className="flex items-center gap-4">
-            {/* Menu Dropdown de Notificações */}
             <div className="relative">
               <button 
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -442,7 +416,6 @@ const DashboardSub = () => {
         </div>
       </header>
 
-      {/* Modal de Detalhes da Ocorrência COM MAPA INTEGRADO */}
       {selectedPost && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden relative flex flex-col max-h-[90vh]">
@@ -465,7 +438,6 @@ const DashboardSub = () => {
             </div>
 
             <div className="p-6 space-y-5 overflow-y-auto flex-1">
-              {/* MAPA INTEGRADO PARA APENAS EXIBIÇÃO */}
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-red-500" /> Localização Georreferenciada (Apenas Leitura)
@@ -476,7 +448,6 @@ const DashboardSub = () => {
                 />
               </div>
 
-              {/* Fotos da Ocorrência */}
               {selectedPost.photos && (Array.isArray(selectedPost.photos) ? selectedPost.photos.length > 0 : typeof selectedPost.photos === 'string') && (
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Anexos de Evidências</span>
@@ -496,13 +467,11 @@ const DashboardSub = () => {
                 </div>
               )}
 
-              {/* Descrição */}
               <div className="space-y-1 bg-slate-50 p-4 rounded-xl border border-slate-200/60">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Relato Completo</span>
                 <p className="text-sm text-slate-700 leading-relaxed font-medium">{selectedPost.description}</p>
               </div>
 
-              {/* Grid de Informações de Endereço */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cidade / UF</span>
@@ -534,15 +503,11 @@ const DashboardSub = () => {
                 Fechar Painel
               </button>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* Conteúdo Central em Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Formulário Lateral de Cadastro/Edição de Sub-contas */}
         <section className="lg:col-span-1">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-5 sticky top-6">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -572,7 +537,6 @@ const DashboardSub = () => {
             )}
 
             <form onSubmit={handleSaveSub} className="space-y-4">
-              {/* Avatar upload */}
               <div className="flex flex-col items-center justify-center space-y-2 pb-2">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block text-center w-full">Foto de Perfil</label>
                 <div className="relative group">
@@ -593,13 +557,11 @@ const DashboardSub = () => {
                 <input id="sub-avatar-upload" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
               </div>
 
-              {/* Título */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Título / Nome</label>
                 <input type="text" name="tittle" required value={formData.tittle} onChange={handleInputChange} placeholder="Ex: Fiscal Cleber - Zona Norte" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
               </div>
 
-              {/* Área Gerenciada */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Área Gerenciada / Setor</label>
                 <div className="relative">
@@ -608,7 +570,6 @@ const DashboardSub = () => {
                 </div>
               </div>
 
-              {/* Email */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">E-mail Corporativo</label>
                 <div className="relative">
@@ -617,7 +578,6 @@ const DashboardSub = () => {
                 </div>
               </div>
 
-              {/* Senha */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{editingId ? 'Nova Senha (Opcional)' : 'Senha do Sub'}</label>
                 <div className="relative">
@@ -633,16 +593,12 @@ const DashboardSub = () => {
           </div>
         </section>
 
-        {/* Coluna de Exibição de Listagem Geral com Abas Dinâmicas */}
         <section className="lg:col-span-2 space-y-6">
-          
-          {/* Card topo informativo */}
           <div className="bg-gradient-to-r from-slate-900 to-blue-900 text-white p-6 rounded-2xl shadow-sm border border-slate-800">
             <h2 className="text-xl font-bold tracking-tight">Painel Operacional Sub 👋</h2>
             <p className="text-xs text-slate-300 font-light mt-1">Alternar modos operacionais abaixo para visualizar dados brutos da prefeitura ou gerenciar chaves de acesso vinculadas.</p>
           </div>
 
-          {/* Botões de Ação Dinâmicos (Utilitários) - Planos Removido */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <button 
               onClick={handleOpenProtocolsTab}
@@ -667,7 +623,6 @@ const DashboardSub = () => {
             </button>
           </div>
 
-          {/* CONTEÚDO DA ABA 1: LISTAGEM DE OCORRÊNCIAS/NOTIFICAÇÕES COLETADAS */}
           {activeTab === 'protocols' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between pb-1">
@@ -693,35 +648,38 @@ const DashboardSub = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {notifications.map((notification) => {
                     const post = postsDetails[notification.idPost];
-                    if (!post) return null;
 
                     return (
                       <div 
                         key={notification._id}
-                        onClick={() => setSelectedPost(post)}
-                        className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group hover:border-blue-400"
+                        onClick={() => post ? setSelectedPost(post) : alert('Os detalhes deste registro ainda estão sendo carregados...')}
+                        className={`bg-white rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all flex flex-col justify-between group ${post ? 'hover:border-blue-400 cursor-pointer' : 'opacity-75 cursor-wait'}`}
                       >
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-md border border-blue-100 uppercase tracking-wide">
-                              Protocolo: {post.protocol || 'S/N'}
+                              Protocolo: {post ? (post.protocol || 'S/N') : 'Carregando...'}
                             </span>
                             <span className="text-[9px] text-slate-400 font-mono">
                               {new Date(notification.date).toLocaleDateString('pt-BR')}
                             </span>
                           </div>
 
-                          {post.photos && (Array.isArray(post.photos) ? post.photos.length > 0 : typeof post.photos === 'string') && (
+                          {post?.photos && (Array.isArray(post.photos) ? post.photos.length > 0 : typeof post.photos === 'string') ? (
                             <div className="w-full h-28 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
                               <img src={Array.isArray(post.photos) ? post.photos[0] : post.photos} alt="Evidência Principal" className="w-full h-full object-cover" />
                             </div>
-                          )}
+                          ) : !post ? (
+                            <div className="w-full h-28 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                            </div>
+                          ) : null}
 
                           <p className="text-sm text-slate-700 font-medium line-clamp-3 leading-relaxed">
-                            {post.description}
+                            {post ? post.description : 'Buscando detalhes do relato no servidor...'}
                           </p>
 
-                          {post.managedArea && (
+                          {post?.managedArea && (
                             <div className="text-[10px] bg-slate-100 px-2 py-1 rounded border border-slate-200 inline-block font-bold text-slate-600 uppercase">
                               Setor: {post.managedArea}
                             </div>
@@ -729,8 +687,11 @@ const DashboardSub = () => {
                         </div>
 
                         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-semibold group-hover:text-blue-600 transition-colors">
-                          <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" /> {post.city || 'Cidade N/D'}</span>
-                          <span className="text-[10px] font-bold text-blue-600 underline">Auditar com mapa →</span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" /> 
+                            {post ? (post.city || 'Cidade N/D') : 'Carregando localização...'}
+                          </span>
+                          {post && <span className="text-[10px] font-bold text-blue-600 underline">Auditar com mapa →</span>}
                         </div>
                       </div>
                     );
@@ -740,7 +701,6 @@ const DashboardSub = () => {
             </div>
           )}
 
-          {/* CONTEÚDO DA ABA 2: LISTAGEM PADRÃO DE SUB-CONTAS */}
           {activeTab === 'subs' && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-1">

@@ -23,6 +23,7 @@ const Dashboard = () => {
     protocol: '', 
     cep: '',
     city: '',
+    addressNumber: '', // Campo local para o número do endereço
     photos: [], 
     description: '',
     coordinates: null,
@@ -148,16 +149,9 @@ const Dashboard = () => {
 
   const handleSearchAddressOnMap = async () => {
     const { city, cep } = newPost;
-    
-    const queryParts = [];
-    if (city) queryParts.push(city);
-    if (cep) queryParts.push(cep);
-    queryParts.push('Brasil');
 
-    const searchQuery = queryParts.join(', ');
-
-    if (queryParts.length <= 1) {
-      setMessage({ type: 'error', text: 'Preencha os campos de endereço antes de buscar no mapa.' });
+    if (!cep && !city) {
+      setMessage({ type: 'error', text: 'Preencha os campos de CEP ou Cidade antes de buscar no mapa.' });
       return;
     }
 
@@ -165,16 +159,32 @@ const Dashboard = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`
-      );
+      // Correção crucial: Utiliza parâmetros estruturados do Nominatim para CEP e Cidade.
+      // Isso evita que o motor de busca tente adivinhar números sem nome de rua e caia em locais errados.
+      let url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brasil`;
+      if (cep) url += `&postalcode=${encodeURIComponent(cep)}`;
+      if (city) url += `&city=${encodeURIComponent(city)}`;
+
+      const response = await fetch(url);
       const data = await response.json();
 
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
         updateMarkerPosition(parseFloat(lat), parseFloat(lon), false);
       } else {
-        setMessage({ type: 'error', text: 'Endereço não localizado no mapa. Tente refinar os campos.' });
+        // Fallback alternativo em texto simples caso a busca estruturada falhe por completo
+        const fallbackQuery = `${cep ? cep : ''} ${city ? city : ''} Brasil`.trim();
+        const fallbackResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackQuery)}&limit=1`
+        );
+        const fallbackData = await fallbackResponse.json();
+
+        if (fallbackData && fallbackData.length > 0) {
+          const { lat, lon } = fallbackData[0];
+          updateMarkerPosition(parseFloat(lat), parseFloat(lon), false);
+        } else {
+          setMessage({ type: 'error', text: 'Endereço não localizado no mapa. Verifique o CEP e a Cidade.' });
+        }
       }
     } catch (error) {
       console.error('Erro na geocodificação:', error);
@@ -209,8 +219,11 @@ const Dashboard = () => {
     const files = Array.from(e.target.files);
     setMessage({ type: '', text: '' });
 
-    if (files.length > 5) {
-      setMessage({ type: 'error', text: 'Você pode selecionar no máximo 5 fotos por ocorrência.' });
+    if (newPost.photos.length + files.length > 5) {
+      setMessage({ 
+        type: 'error', 
+        text: `Você pode selecionar no máximo 5 fotos por ocorrência. Já existem ${newPost.photos.length} adicionada(s).` 
+      });
       e.target.value = '';
       return;
     }
@@ -233,7 +246,7 @@ const Dashboard = () => {
 
     Promise.all(base64Promises)
       .then(base64Images => {
-        setNewPost(prev => ({ ...prev, photos: base64Images }));
+        setNewPost(prev => ({ ...prev, photos: [...prev.photos, ...base64Images] }));
       })
       .catch(err => {
         setMessage({ type: 'error', text: 'Erro ao processar uma ou mais imagens.' });
@@ -273,7 +286,7 @@ const Dashboard = () => {
 
       setMessage({ type: 'success', text: 'Ocorrência registrada com sucesso!' });
       setNewPost({ 
-        protocol: '', cep: '', city: '', photos: [], description: '', coordinates: null, managedArea: '' 
+        protocol: '', cep: '', city: '', addressNumber: '', photos: [], description: '', coordinates: null, managedArea: '' 
       });
       setManagedAreas([]);
       
@@ -388,7 +401,7 @@ const Dashboard = () => {
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 space-y-3">
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Localização do Problema</p>
                 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase">CEP</label>
                     <input
@@ -413,11 +426,22 @@ const Dashboard = () => {
                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-xs"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Número</label>
+                    <input
+                      type="text"
+                      name="addressNumber"
+                      value={newPost.addressNumber}
+                      onChange={handleInputChange}
+                      placeholder="123"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-xs"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1 pt-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                    Área Gerenciada
+                    Compartilhar com:
                     {areasLoading && <Loader2 className="w-3 h-3 animate-spin text-blue-600" />}
                   </label>
                   <select
@@ -429,10 +453,10 @@ const Dashboard = () => {
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-xs disabled:bg-slate-100 disabled:text-slate-400 transition-colors"
                   >
                     {managedAreas.length === 0 ? (
-                      <option value="">{newPost.city ? 'Nenhuma área disponível nesta cidade' : 'Digite a cidade primeiro...'}</option>
+                      <option value="">{newPost.city ? 'Nenhuma opção disponível nesta cidade' : 'Digite a cidade primeiro...'}</option>
                     ) : (
                       <>
-                        <option value="">Selecione uma área registrada...</option>
+                        <option value="">Selecione uma opção...</option>
                         {managedAreas.map((area, index) => (
                           <option key={index} value={area}>{area}</option>
                         ))}
@@ -517,7 +541,7 @@ const Dashboard = () => {
                   rows="3"
                   value={newPost.description}
                   onChange={handleInputChange}
-                  placeholder="Descreva detalhadamente o problem encontrado..."
+                  placeholder="Descreva detalhadamente o problema encontrado..."
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-sm resize-none"
                 ></textarea>
               </div>
@@ -588,7 +612,7 @@ const Dashboard = () => {
                     
                     {post.managedArea && (
                       <div className="text-[11px] bg-slate-100 px-2 py-1 rounded border border-slate-200 inline-block font-medium text-slate-600">
-                        Área: {post.managedArea}
+                        Compartilhado com: {post.managedArea}
                       </div>
                     )}
                   </div>
