@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   PlusCircle, 
@@ -18,6 +18,115 @@ import {
   Bell,
   Compass
 } from 'lucide-react';
+import { Map, useMap } from '@vis.gl/react-google-maps';
+
+// Tratamento robusto de coordenadas vindas do banco de dados (Objetos ou Arrays GeoJSON)
+const getCoords = (post) => {
+  if (!post || !post.coordinates) return null;
+  
+  if (post.coordinates.lat !== undefined && post.coordinates.lng !== undefined) {
+    return {
+      lat: parseFloat(post.coordinates.lat),
+      lng: parseFloat(post.coordinates.lng)
+    };
+  }
+  
+  if (Array.isArray(post.coordinates) && post.coordinates.length === 2) {
+    return {
+      lat: parseFloat(post.coordinates[0]),
+      lng: parseFloat(post.coordinates[1])
+    };
+  }
+  
+  return null;
+};
+
+// Subcomponente de visualização idêntico à estratégia do Dashboard funcional
+const ViewMapController = ({ coordenadas }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (map && coordenadas) {
+      map.panTo(coordenadas);
+      map.setZoom(16);
+    }
+  }, [map, coordenadas]);
+
+  return (
+    <div className="w-full h-full relative">
+      <Map
+        defaultCenter={coordenadas || { lat: -23.55052, lng: -46.633308 }}
+        defaultZoom={15}
+        gestureHandling="greedy"
+      >
+        {coordenadas && map && (
+          <CustomHtmlMarker map={map} position={coordenadas} />
+        )}
+      </Map>
+    </div>
+  );
+};
+
+// Componente utilitário idêntico ao do Dashboard para fixar o marcador HTML nas coordenadas
+const CustomHtmlMarker = ({ map, position }) => {
+  const [pixelPosition, setPixelPosition] = useState(null);
+
+  useEffect(() => {
+    if (!map || !position) return;
+
+    const updatePosition = () => {
+      const projection = map.getProjection();
+      if (projection) {
+        const latLng = new window.google.maps.LatLng(position.lat, position.lng);
+        const point = projection.fromLatLngToPoint(latLng);
+        
+        const bounds = map.getBounds();
+        if (bounds) {
+          const nwLatLng = new window.google.maps.LatLng(
+            bounds.getNorthEast().lat(),
+            bounds.getSouthWest().lng()
+          );
+          
+          const topLeft = projection.fromLatLngToPoint(nwLatLng);
+          const scale = Math.pow(2, map.getZoom());
+          
+          setPixelPosition({
+            x: (point.x - topLeft.x) * scale,
+            y: (point.y - topLeft.y) * scale,
+          });
+        }
+      }
+    };
+
+    const listeners = [
+      map.addListener('bounds_changed', updatePosition),
+      map.addListener('zoom_changed', updatePosition),
+      map.addListener('idle', updatePosition)
+    ];
+
+    updatePosition();
+
+    return () => listeners.forEach(l => window.google.maps.event.removeListener(l));
+  }, [map, position]);
+
+  if (!pixelPosition) return null;
+
+  return (
+    <div 
+      style={{
+        position: 'absolute',
+        left: `${pixelPosition.x}px`,
+        top: `${pixelPosition.y}px`,
+        transform: 'translate(-50%, -100%)',
+        pointerEvents: 'none',
+        fontSize: '32px',
+        zIndex: 999
+      }}
+    >
+      📍
+    </div>
+  );
+};
 
 const DashboardMaster = () => {
   const getMasterId = () => {
@@ -39,10 +148,6 @@ const DashboardMaster = () => {
   const [protocolsLoading, setProtocolsLoading] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
 
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
-  const mapContainerRef = useRef(null);
-
   const [formData, setFormData] = useState({
     tittle: '',
     email: '',
@@ -54,77 +159,6 @@ const DashboardMaster = () => {
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
-
-  useEffect(() => {
-    if (!document.getElementById('leaflet-css')) {
-      const link = document.createElement('link');
-      link.id = 'leaflet-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-
-    if (!window.L) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedPost && mapContainerRef.current && window.L) {
-      const timer = setTimeout(() => {
-        initDisplayMap();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-    
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, [selectedPost]);
-
-  const initDisplayMap = () => {
-    if (!window.L || !mapContainerRef.current) return;
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-
-    const L = window.L;
-    const lat = selectedPost.coordinates?.lat || -23.55052;
-    const lng = selectedPost.coordinates?.lng || -46.633308;
-
-    const map = L.map(mapContainerRef.current, {
-      zoomControl: true,
-      boxZoom: false,
-      doubleClickZoom: false,
-      dragging: true,
-      scrollWheelZoom: false
-    }).setView([lat, lng], 15);
-    
-    mapRef.current = map;
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-
-    const defaultIcon = L.icon({
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41]
-    });
-
-    markerRef.current = L.marker([lat, lng], { icon: defaultIcon })
-      .addTo(map)
-      .bindPopup(`<b>Protocolo:</b> ${selectedPost.protocol || 'Sem ref.'}`)
-      .openPopup();
-  };
 
   const fetchSubs = async () => {
     try {
@@ -328,6 +362,9 @@ const DashboardMaster = () => {
     fetchAllNotificationPosts();
   };
 
+  const parsedCoordinates = selectedPost ? getCoords(selectedPost) : null;
+  const temCep = selectedPost?.CEP || selectedPost?.cep;
+
   return (
     <div className="min-h-screen bg-slate-50 antialiased font-sans">
       <header className="bg-gradient-to-r from-green-700 via-green-600 to-blue-700 text-white shadow-md relative z-50">
@@ -442,10 +479,10 @@ const DashboardMaster = () => {
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-red-500" /> Localização Georreferenciada (Apenas Leitura)
                 </span>
-                <div 
-                  ref={mapContainerRef} 
-                  className="w-full h-44 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden z-10 shadow-inner"
-                />
+                {/* Ajustado com a mesma arquitetura do mapa funcional */}
+                <div className="w-full h-44 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative shadow-inner">
+                  <ViewMapController coordenadas={parsedCoordinates} />
+                </div>
               </div>
 
               {selectedPost.photos && (Array.isArray(selectedPost.photos) ? selectedPost.photos.length > 0 : typeof selectedPost.photos === 'string') && (
@@ -473,15 +510,17 @@ const DashboardMaster = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div className={`bg-slate-50 p-3 rounded-xl border border-slate-100 ${temCep ? '' : 'col-span-2'}`}>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Cidade / UF</span>
                   <p className="text-xs font-bold text-slate-700 truncate">{selectedPost.city || selectedPost.City || 'Não informada'}</p>
                 </div>
 
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">CEP</span>
-                  <p className="text-xs font-mono font-bold text-slate-700">{selectedPost.CEP || selectedPost.cep || 'Sem CEP'}</p>
-                </div>
+                {temCep && (
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">CEP</span>
+                    <p className="text-xs font-mono font-bold text-slate-700">{selectedPost.CEP || selectedPost.cep}</p>
+                  </div>
+                )}
 
                 {selectedPost.managedArea && (
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 col-span-2 flex items-center gap-2">
