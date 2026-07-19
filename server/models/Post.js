@@ -12,7 +12,7 @@ const postSchema = new mongoose.Schema({
     }, 
     CEP: {
         type: String,
-        required: true
+        required: false
     },
     city:{
         type: String,

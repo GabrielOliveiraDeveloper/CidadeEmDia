@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PlusCircle, 
   Trash2, 
@@ -14,6 +14,164 @@ import {
   RefreshCw,
   Search
 } from 'lucide-react';
+import { Map, useMap } from '@vis.gl/react-google-maps';
+
+// Subcomponente interno para gerenciar os comandos que controlam o mapa do Google
+const MapController = ({ coordenadas, setCoordinates, enderecoBusca, geoLoading, setGeoLoading, setMessage }) => {
+  const map = useMap();
+
+  // Executado quando o botão de buscar endereço dispara um clique
+  useEffect(() => {
+    if (!enderecoBusca.trigger) return;
+
+    const { street, number, city, cep } = enderecoBusca;
+
+    if (!cep && !city && !street) {
+      setMessage({ type: 'error', text: 'Preencha ao menos a Cidade, Rua ou CEP antes de buscar.' });
+      enderecoBusca.resetTrigger();
+      return;
+    }
+
+    setGeoLoading(true);
+    setMessage({ type: '', text: '' });
+
+    // FALLBACK GRATUITO: Usando Nominatim (OpenStreetMap) estruturado para burlar o bloqueio de faturamento do Google
+    let url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brasil`;
+    if (cep) url += `&postalcode=${encodeURIComponent(cep)}`;
+    if (city) url += `&city=${encodeURIComponent(city)}`;
+    if (street) url += `&street=${encodeURIComponent(street + (number ? ' ' + number : ''))}`;
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        setGeoLoading(false);
+        enderecoBusca.resetTrigger();
+
+        if (data && data.length > 0) {
+          const novaPosicao = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+          
+          setCoordinates(novaPosicao);
+          
+          if (map) {
+            map.panTo(novaPosicao);
+            map.setZoom(17); // Zoom aproximado na rua/casa encontrado
+          }
+        } else {
+          // Tenta busca simples em texto caso a estruturada falhe
+          const fallbackQuery = `${street ? street + ',' : ''} ${number ? number : ''} ${city ? city + ',' : ''} ${cep ? cep : ''}`.trim();
+          
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackQuery)}&limit=1`)
+            .then(res => res.json())
+            .then(fallbackData => {
+              if (fallbackData && fallbackData.length > 0) {
+                const novaPosicao = { lat: parseFloat(fallbackData[0].lat), lng: parseFloat(fallbackData[0].lon) };
+                setCoordinates(novaPosicao);
+                if (map) {
+                  map.panTo(novaPosicao);
+                  map.setZoom(17);
+                }
+              } else {
+                setMessage({ type: 'error', text: 'Endereço não localizado. Verifique os dados digitados.' });
+              }
+            });
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        setGeoLoading(false);
+        enderecoBusca.resetTrigger();
+        setMessage({ type: 'error', text: 'Erro ao conectar com o serviço de busca geográfica.' });
+      });
+
+  }, [enderecoBusca.trigger]);
+
+  // Captura o clique manual do usuário no mapa para ajuste fino
+  const handleMapClick = (e) => {
+    if (e.detail.latLng) {
+      const { lat, lng } = e.detail.latLng;
+      setCoordinates({ lat, lng });
+    }
+  };
+
+  return (
+    <div className="w-full h-full relative">
+      <Map
+        defaultCenter={{ lat: -23.55052, lng: -46.633308 }}
+        defaultZoom={12}
+        gestureHandling="greedy"
+        onClick={handleMapClick}
+      >
+        {/* Renderização de marcador customizada em HTML para evitar o bloqueio sem faturamento da API */}
+        {coordenadas && map && (
+          <CustomHtmlMarker map={map} position={coordenadas} />
+        )}
+      </Map>
+    </div>
+  );
+};
+
+// Componente utilitário corrigido para fixar o marcador HTML nas coordenadas geográficas do mapa
+const CustomHtmlMarker = ({ map, position }) => {
+  const [pixelPosition, setPixelPosition] = useState(null);
+
+  useEffect(() => {
+    if (!map || !position) return;
+
+    const updatePosition = () => {
+      const projection = map.getProjection();
+      if (projection) {
+        const latLng = new window.google.maps.LatLng(position.lat, position.lng);
+        const point = projection.fromLatLngToPoint(latLng);
+        
+        const bounds = map.getBounds();
+        if (bounds) {
+          // CORREÇÃO: Monta o ponto Noroeste (Top-Left) combinando a latitude máxima (Norte) com a longitude mínima (Oeste)
+          const nwLatLng = new window.google.maps.LatLng(
+            bounds.getNorthEast().lat(),
+            bounds.getSouthWest().lng()
+          );
+          
+          const topLeft = projection.fromLatLngToPoint(nwLatLng);
+          const scale = Math.pow(2, map.getZoom());
+          
+          setPixelPosition({
+            x: (point.x - topLeft.x) * scale,
+            y: (point.y - topLeft.y) * scale,
+          });
+        }
+      }
+    };
+
+    // Escuta mudanças de movimentação do mapa para manter o marcador fixado no local correto da tela
+    const listeners = [
+      map.addListener('bounds_changed', updatePosition),
+      map.addListener('zoom_changed', updatePosition),
+      map.addListener('idle', updatePosition)
+    ];
+
+    updatePosition();
+
+    return () => listeners.forEach(l => window.google.maps.event.removeListener(l));
+  }, [map, position]);
+
+  if (!pixelPosition) return null;
+
+  return (
+    <div 
+      style={{
+        position: 'absolute',
+        left: `${pixelPosition.x}px`,
+        top: `${pixelPosition.y}px`,
+        transform: 'translate(-50%, -100%)',
+        pointerEvents: 'none',
+        fontSize: '32px',
+        zIndex: 999
+      }}
+    >
+      📍
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const userId = localStorage.getItem('@Cidademdia:userId') || 'Usuário';
@@ -23,7 +181,8 @@ const Dashboard = () => {
     protocol: '', 
     cep: '',
     city: '',
-    addressNumber: '', // Campo local para o número do endereço
+    street: '', 
+    addressNumber: '', 
     photos: [], 
     description: '',
     coordinates: null,
@@ -37,10 +196,8 @@ const Dashboard = () => {
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [geoLoading, setGeoLoading] = useState(false);
-
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
-  const mapContainerRef = useRef(null);
+  
+  const [buscarEnderecoTrigger, setBuscarEnderecoTrigger] = useState({ trigger: false });
 
   const generateRandomProtocol = () => {
     const randomNum = `PRT${Date.now().toString().slice(-6)}`;
@@ -50,31 +207,6 @@ const Dashboard = () => {
   useEffect(() => {
     fetchPosts();
     generateRandomProtocol();
-
-    if (!document.getElementById('leaflet-css')) {
-      const link = document.createElement('link');
-      link.id = 'leaflet-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-
-    if (!window.L) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.async = true;
-      script.onload = initMap;
-      document.body.appendChild(script);
-    } else {
-      initMap();
-    }
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
   }, []);
 
   useEffect(() => {
@@ -103,95 +235,15 @@ const Dashboard = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [newPost.city]);
 
-  const initMap = () => {
-    if (!window.L || mapRef.current || !mapContainerRef.current) return;
-
-    const L = window.L;
-    const defaultCoords = [-23.55052, -46.633308];
-
-    const map = L.map(mapContainerRef.current).setView(defaultCoords, 13);
-    mapRef.current = map;
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-
-    const defaultIcon = L.icon({
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41]
+  const handleSearchAddressOnMap = () => {
+    setBuscarEnderecoTrigger({
+      trigger: true,
+      street: newPost.street,
+      number: newPost.addressNumber,
+      city: newPost.city,
+      cep: newPost.cep,
+      resetTrigger: () => setBuscarEnderecoTrigger({ trigger: false })
     });
-
-    const marker = L.marker(defaultCoords, { icon: defaultIcon }).addTo(map);
-    markerRef.current = marker;
-
-    map.on('click', (e) => {
-      const { lat, lng } = e.latlng;
-      updateMarkerPosition(lat, lng, true);
-    });
-  };
-
-  const updateMarkerPosition = (lat, lng, isManualClick = false) => {
-    if (markerRef.current && mapRef.current) {
-      markerRef.current.setLatLng([lat, lng]);
-      
-      if (!isManualClick) {
-        mapRef.current.setView([lat, lng], 16);
-      }
-
-      setNewPost(prev => ({
-        ...prev,
-        coordinates: { lat, lng }
-      }));
-    }
-  };
-
-  const handleSearchAddressOnMap = async () => {
-    const { city, cep } = newPost;
-
-    if (!cep && !city) {
-      setMessage({ type: 'error', text: 'Preencha os campos de CEP ou Cidade antes de buscar no mapa.' });
-      return;
-    }
-
-    setGeoLoading(true);
-    setMessage({ type: '', text: '' });
-
-    try {
-      // Correção crucial: Utiliza parâmetros estruturados do Nominatim para CEP e Cidade.
-      // Isso evita que o motor de busca tente adivinhar números sem nome de rua e caia em locais errados.
-      let url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brasil`;
-      if (cep) url += `&postalcode=${encodeURIComponent(cep)}`;
-      if (city) url += `&city=${encodeURIComponent(city)}`;
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        updateMarkerPosition(parseFloat(lat), parseFloat(lon), false);
-      } else {
-        // Fallback alternativo em texto simples caso a busca estruturada falhe por completo
-        const fallbackQuery = `${cep ? cep : ''} ${city ? city : ''} Brasil`.trim();
-        const fallbackResponse = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackQuery)}&limit=1`
-        );
-        const fallbackData = await fallbackResponse.json();
-
-        if (fallbackData && fallbackData.length > 0) {
-          const { lat, lon } = fallbackData[0];
-          updateMarkerPosition(parseFloat(lat), parseFloat(lon), false);
-        } else {
-          setMessage({ type: 'error', text: 'Endereço não localizado no mapa. Verifique o CEP e a Cidade.' });
-        }
-      }
-    } catch (error) {
-      console.error('Erro na geocodificação:', error);
-      setMessage({ type: 'error', text: 'Erro ao conectar com o serviço de mapas.' });
-    } finally {
-      setGeoLoading(false);
-    }
   };
 
   const fetchPosts = async () => {
@@ -263,8 +315,7 @@ const Dashboard = () => {
 
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setMessage({ type: '', text: '' });
+    setLoading(true); 
 
     try {
       const response = await fetch('https://cidadeemdia.onrender.com/posts', {
@@ -277,7 +328,8 @@ const Dashboard = () => {
           city: newPost.city,
           photos: newPost.photos, 
           description: newPost.description,
-          managedArea: newPost.managedArea 
+          managedArea: newPost.managedArea,
+          coordinates: newPost.coordinates 
         })
       });
 
@@ -286,7 +338,7 @@ const Dashboard = () => {
 
       setMessage({ type: 'success', text: 'Ocorrência registrada com sucesso!' });
       setNewPost({ 
-        protocol: '', cep: '', city: '', addressNumber: '', photos: [], description: '', coordinates: null, managedArea: '' 
+        protocol: '', cep: '', city: '', street: '', addressNumber: '', photos: [], description: '', coordinates: null, managedArea: '' 
       });
       setManagedAreas([]);
       
@@ -401,13 +453,13 @@ const Dashboard = () => {
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 space-y-3">
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Localização do Problema</p>
                 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">CEP</label>
+                    {/* Campo de CEP alterado para opcional (sem a tag 'required') */}
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">CEP (Opcional)</label>
                     <input
                       type="text"
                       name="cep"
-                      required
                       value={newPost.cep}
                       onChange={handleInputChange}
                       placeholder="01310-100"
@@ -426,6 +478,20 @@ const Dashboard = () => {
                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-xs"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Rua</label>
+                    <input
+                      type="text"
+                      name="street"
+                      value={newPost.street}
+                      onChange={handleInputChange}
+                      placeholder="Av. Paulista"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-xs"
+                    />
+                  </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-slate-500 uppercase">Número</label>
                     <input
@@ -433,7 +499,7 @@ const Dashboard = () => {
                       name="addressNumber"
                       value={newPost.addressNumber}
                       onChange={handleInputChange}
-                      placeholder="123"
+                      placeholder="1000"
                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-xs"
                     />
                   </div>
@@ -482,15 +548,23 @@ const Dashboard = () => {
 
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider flex justify-between">
-                  <span>Ajuste Fino (Clique se necessário)</span>
+                  <span>Ajuste Fino (Clique no mapa se necessário)</span>
                   {newPost.coordinates && (
                     <span className="text-emerald-600 font-mono text-[10px]">✓ Coordenadas Prontas</span>
                   )}
                 </label>
-                <div 
-                  ref={mapContainerRef} 
-                  className="w-full h-44 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden z-10"
-                />
+                
+                {/* Container do Google Maps */}
+                <div className="w-full h-44 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative">
+                  <MapController 
+                    coordenadas={newPost.coordinates}
+                    setCoordinates={(coords) => setNewPost(p => ({ ...p, coordinates: coords }))}
+                    enderecoBusca={buscarEnderecoTrigger}
+                    geoLoading={geoLoading}
+                    setGeoLoading={setGeoLoading}
+                    setMessage={setMessage}
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">
