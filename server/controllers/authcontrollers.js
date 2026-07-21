@@ -6,47 +6,28 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const sendWelcomeEmail = async (to, userName) => {
-    const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
+    let transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
         port: 465,
         secure: true,
         auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
+            user: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
+            pass: process.env.EMAIL_PASS || 'slht vdcm pfgi mmru'
+        }
     });
 
-    const subject = 'Sua conta foi criada com sucesso! - Cidadeemdia';
-    const text = `Olá ${userName},\n\nSua conta foi criada com sucesso na plataforma Cidadeemdia! Seja muito bem-vindo(a).\n\nAtenciosamente,\nEquipe Cidadeemdia`;
-
-    const html = `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <body style="font-family: Arial, sans-serif; background-color: #ffffff; color: #333333; padding: 20px;">
-        <div style="max-width: 500px; margin: 0 auto; border: 1px solid #2e7d32; border-radius: 8px; padding: 20px;">
-            <h2 style="color: #2e7d32; margin-top: 0;">Bem-vindo(a) ao Cidadeemdia!</h2>
-            <p>Olá, <strong>${userName}</strong>!</p>
-            <p>Sua conta foi criada com sucesso na nossa plataforma.</p>
-            <p style="margin-top: 20px; color: #666666; font-size: 14px;">Atenciosamente,<br><strong>Equipe Cidadeemdia</strong></p>
-        </div>
-    </body>
-    </html>
-    `;
-
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to,
-        subject,
-        text,
-        html,
+    let mailOptions = {
+        from: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
+        to: to,
+        subject: 'Sua conta foi criada com sucesso! - Cidadeemdia',
+        text: `Olá ${userName},\n\nSua conta foi criada com sucesso na plataforma Cidadeemdia! Seja muito bem-vindo(a).\n\nAtenciosamente,\nEquipe Cidadeemdia`
     };
 
     try {
         await transporter.sendMail(mailOptions);
-        console.log(`Email sent to ${to}`);
-    }
-    catch (error) {
-        console.error(`Error sending email to ${to}:`, error);
+        console.log(`Email enviado para ${to}`);
+    } catch (error) {
+        console.error(`Erro ao enviar email para ${to}:`, error);
     }
 };
 
@@ -62,7 +43,7 @@ const registerController = async ( req, res ) => {
         const newUser = new User({ name, email, tel, imageProfile, password });
         await newUser.save();
 
-        await sendWelcomeEmail(email, name);
+        sendWelcomeEmail(email, name);
 
         res.status(201).json({ message: 'Usuário registrado com sucesso' });
     }
@@ -129,7 +110,7 @@ const registerMaster = async ( req, res ) => {
         const newMaster = new Master({ tittle, CPForCNPJ, email, imageProfile, state, city, managedArea, password });
         await newMaster.save();
 
-        await sendWelcomeEmail(email, tittle);
+        sendWelcomeEmail(email, tittle);
 
         res.status(201).json({ message: 'Master registrado com sucesso' });
     }
