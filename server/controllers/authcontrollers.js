@@ -6,12 +6,11 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const sendWelcomeEmail = async (to, userName) => {
-    const port = Number(process.env.EMAIL_PORT) || 587;
 
     let transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-        port: 465,
-        secure: true, // true para 465 (SSL), false para 587 (TLS)
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
         auth: {
             user: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
             pass: process.env.EMAIL_PASS || 'slht vdcm pfgi mmru'
