@@ -1,45 +1,34 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const User = require('../models/User');
 const Master = require('../models/Master');
 const Subs = require('../models/Subs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
+// Inicializa o SDK do Resend utilizando a chave da API definida no arquivo .env
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 const sendWelcomeEmail = async (to, userName) => {
-
-    let transporter = nodemailer.createTransport({
-        service: 'gmail', // Usa as configurações nativas otimizadas do Nodemailer para o Gmail
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        family: 4,
-        auth: {
-            user: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
-            pass: process.env.EMAIL_PASS || 'slht vdcm pfgi mmru'
-        },
-        logger: true, // Adiciona logs formatados no console
-        debug: true,
-        connectionTimeout: 20000, // Evita que o Node.js fique esperando infinitamente
-        greetingTimeout: 20000,
-        socketTimeout: 20000
-    });
-
-    let mailOptions = {
-        from: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
-        to: to,
-        subject: 'Sua conta foi criada com sucesso! - Cidadeemdia',
-        text: `Olá ${userName},\n\nSua conta foi criada com sucesso na plataforma Cidadeemdia! Seja muito bem-vindo(a).\n\nAtenciosamente,\nEquipe Cidadeemdia`
-    };
-
     try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Email enviado com sucesso para ${to}`);
+        const { data, error } = await resend.emails.send({
+            from: process.env.EMAIL_FROM || 'Cidadeemdia <onboarding@resend.dev>',
+            to: "gabrield3vsilva@gmail.com",
+            subject: 'Sua conta foi criada com sucesso! - Cidadeemdia',
+            text: `Olá ${userName},\n\nSua conta foi criada com sucesso na plataforma Cidadeemdia! Seja muito bem-vindo(a).\n\nAtenciosamente,\nEquipe Cidadeemdia`
+        });
+
+        if (error) {
+            console.error(`Erro ao enviar email para ${to}:`, error);
+            return;
+        }
+
+        console.log(`Email enviado com sucesso para ${to}. ID do envio: ${data.id}`);
     } catch (error) {
-        console.error(`Erro ao enviar email para ${to}:`, error);
+        console.error(`Erro inesperado ao enviar email para ${to}:`, error);
     }
 };
 
-const registerController = async ( req, res ) => {
+const registerController = async (req, res) => {
     const { name, email, tel, imageProfile, password } = req.body;
 
     try {
@@ -60,7 +49,7 @@ const registerController = async ( req, res ) => {
         console.log(error);
         res.status(500).json({ message: 'Erro ao registrar usuário', error });
     }
-}
+};
 
 const loginController = async (req, res) => {
     const { email, password } = req.body;
@@ -106,7 +95,7 @@ const loginController = async (req, res) => {
     }
 };
 
-const registerMaster = async ( req, res ) => {
+const registerMaster = async (req, res) => {
     const { tittle, CPForCNPJ, email, imageProfile, state, city, managedArea, password } = req.body;
 
     try {
@@ -128,7 +117,7 @@ const registerMaster = async ( req, res ) => {
         console.log(error);
         res.status(500).json({ message: 'Erro ao registrar master', error });
     }
-}
+};
 
 module.exports = {
     registerController,
