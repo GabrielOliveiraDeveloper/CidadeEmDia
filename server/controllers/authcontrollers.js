@@ -6,13 +6,19 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const sendWelcomeEmail = async (to, userName) => {
-    // Usar service: 'gmail' contorna os bloqueios de porta do Render
+    const port = Number(process.env.EMAIL_PORT) || 587;
+
     let transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+        port: 465,
+        secure: true, // true para 465 (SSL), false para 587 (TLS)
         auth: {
             user: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
             pass: process.env.EMAIL_PASS || 'slht vdcm pfgi mmru'
-        }
+        },
+        connectionTimeout: 10000, // Evita que o Node.js fique esperando infinitamente
+        greetingTimeout: 10000,
+        socketTimeout: 10000
     });
 
     let mailOptions = {
@@ -24,7 +30,7 @@ const sendWelcomeEmail = async (to, userName) => {
 
     try {
         await transporter.sendMail(mailOptions);
-        console.log(`Email enviado para ${to}`);
+        console.log(`Email enviado com sucesso para ${to}`);
     } catch (error) {
         console.error(`Erro ao enviar email para ${to}:`, error);
     }
@@ -42,6 +48,7 @@ const registerController = async ( req, res ) => {
         const newUser = new User({ name, email, tel, imageProfile, password });
         await newUser.save();
 
+        // Envia em segundo plano sem travar o cadastro
         sendWelcomeEmail(email, name);
 
         res.status(201).json({ message: 'Usuário registrado com sucesso' });
@@ -109,6 +116,7 @@ const registerMaster = async ( req, res ) => {
         const newMaster = new Master({ tittle, CPForCNPJ, email, imageProfile, state, city, managedArea, password });
         await newMaster.save();
 
+        // Envia em segundo plano sem travar o cadastro
         sendWelcomeEmail(email, tittle);
 
         res.status(201).json({ message: 'Master registrado com sucesso' });
