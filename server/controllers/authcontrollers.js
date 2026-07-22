@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const sendWelcomeEmail = async (to, userName) => {
 
     let transporter = nodemailer.createTransport({
+        service: 'gmail', // Usa as configurações nativas otimizadas do Nodemailer para o Gmail
         host: 'smtp.gmail.com',
         port: 465,
         secure: true,
