@@ -17,6 +17,8 @@ const sendWelcomeEmail = async (to, userName) => {
             user: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
             pass: process.env.EMAIL_PASS || 'slht vdcm pfgi mmru'
         },
+        logger: true, // Adiciona logs formatados no console
+        debug: true,
         connectionTimeout: 20000, // Evita que o Node.js fique esperando infinitamente
         greetingTimeout: 20000,
         socketTimeout: 20000
