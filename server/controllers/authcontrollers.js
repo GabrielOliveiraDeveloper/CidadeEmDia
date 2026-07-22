@@ -9,16 +9,16 @@ const sendWelcomeEmail = async (to, userName) => {
 
     let transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 587,
-        secure: false,
+        port: 465,
+        secure: true,
         family: 4,
         auth: {
             user: process.env.EMAIL_USER || 'sendermailservice01@gmail.com',
             pass: process.env.EMAIL_PASS || 'slht vdcm pfgi mmru'
         },
-        connectionTimeout: 10000, // Evita que o Node.js fique esperando infinitamente
-        greetingTimeout: 10000,
-        socketTimeout: 10000
+        connectionTimeout: 20000, // Evita que o Node.js fique esperando infinitamente
+        greetingTimeout: 20000,
+        socketTimeout: 20000
     });
 
     let mailOptions = {
