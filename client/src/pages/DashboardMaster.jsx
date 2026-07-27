@@ -186,7 +186,7 @@ const DashboardMaster = () => {
       // 2. Busca Páginas Institucionais (localhost:3000/pages)
       let pagesData = [];
       try {
-        const pageResponse = await fetch(`http://localhost:3000/pages`);
+        const pageResponse = await fetch(`https://cidadeemdia.onrender.com/pages`);
         if (pageResponse.ok) {
           const data = await pageResponse.json();
           pagesData = data.map(item => ({ ...item, accountType: 'institutional' }));
@@ -308,7 +308,7 @@ const DashboardMaster = () => {
 
     // Roteamento de Endpoints: Localhost para Páginas e Render para Subs
     const url = isInstitutional
-      ? (isEditing ? `http://localhost:3000/pages/${editingId}` : 'http://localhost:3000/pages')
+      ? (isEditing ? `https://cidadeemdia.onrender.com/pages/${editingId}` : 'https://cidadeemdia.onrender.com/pages')
       : (isEditing ? `https://cidadeemdia.onrender.com/subs/${editingId}` : 'https://cidadeemdia.onrender.com/subs');
     
     const method = isEditing ? 'PUT' : 'POST';
@@ -409,7 +409,7 @@ const DashboardMaster = () => {
 
     // Roteamento do DELETE
     const url = isInstitutional 
-      ? `http://localhost:3000/pages/${id}`
+      ? `https://cidadeemdia.onrender.com/pages/${id}`
       : `https://cidadeemdia.onrender.com/subs/${id}`;
 
     try {

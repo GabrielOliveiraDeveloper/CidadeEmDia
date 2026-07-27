@@ -183,7 +183,7 @@ const DashboardPage = () => {
   // Busca do perfil da própria página
   const fetchPageProfile = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/pages/${pageId}`);
+      const response = await fetch(`https://cidadeemdia.onrender.com/pages/${pageId}`);
       if (response.ok) {
         const data = await response.json();
         setPageProfile(data);
@@ -220,7 +220,7 @@ const DashboardPage = () => {
       // 2. Busca Páginas Institucionais (localhost:3000/pages)
       let pagesData = [];
       try {
-        const pageResponse = await fetch(`http://localhost:3000/pages`);
+        const pageResponse = await fetch(`https://cidadeemdia.onrender.com/pages`);
         if (pageResponse.ok) {
           const data = await pageResponse.json();
           pagesData = data.map(item => ({ ...item, accountType: 'institutional' }));
@@ -343,7 +343,7 @@ const DashboardPage = () => {
 
     // Endpoints distintos: Localhost para Páginas Institucionais e Render para Sub-Contas
     const url = isInstitutional
-      ? (isEditing ? `http://localhost:3000/pages/${editingId}` : 'http://localhost:3000/pages')
+      ? (isEditing ? `https://cidadeemdia.onrender.com/pages/${editingId}` : 'https://cidadeemdia.onrender.com/pages')
       : (isEditing ? `https://cidadeemdia.onrender.com/subs/${editingId}` : 'https://cidadeemdia.onrender.com/subs');
     
     const method = isEditing ? 'PUT' : 'POST';
@@ -443,7 +443,7 @@ const DashboardPage = () => {
     if (!window.confirm(`Tem certeza que deseja remover este registro (${isInstitutional ? 'Página Institucional' : 'Sub-Conta'})?`)) return;
 
     const url = isInstitutional 
-      ? `http://localhost:3000/pages/${id}`
+      ? `https://cidadeemdia.onrender.com/pages/${id}`
       : `https://cidadeemdia.onrender.com/subs/${id}`;
 
     try {
@@ -494,7 +494,7 @@ const DashboardPage = () => {
     };
 
     try {
-      const response = await fetch(`http://localhost:3000/pages/${pageId}`, {
+      const response = await fetch(`https://cidadeemdia.onrender.com/pages/${pageId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData)

@@ -163,7 +163,7 @@ const HomePage = () => {
   const fetchPages = async () => {
     try {
       setLoadingPages(true);
-      const response = await fetch('http://localhost:3000/pages');
+      const response = await fetch('https://cidadeemdia.onrender.com/pages');
       if (response.ok) {
         const data = await response.json();
         setPages(Array.isArray(data) ? data : []);

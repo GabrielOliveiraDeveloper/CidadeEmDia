@@ -27,7 +27,7 @@ const LoginForm = () => {
 
     try {
       // Substitua pela URL completa do seu servidor se necessário (ex: http://localhost:5000/login)
-      const response = await fetch('http://localhost:3000/login', {
+      const response = await fetch('https://cidadeemdia.onrender.com/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
