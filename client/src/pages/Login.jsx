@@ -27,7 +27,7 @@ const LoginForm = () => {
 
     try {
       // Substitua pela URL completa do seu servidor se necessário (ex: http://localhost:5000/login)
-      const response = await fetch('https://cidadeemdia.onrender.com/login', {
+      const response = await fetch('http://localhost:3000/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,6 +64,8 @@ const LoginForm = () => {
           window.location.href = `/master-dashboard?id=${data.id}`;
         } else if (data.role === 'subs') {
           window.location.href = `/subs-dashboard?id=${data.id}`;
+        } else if (data.role === 'pages') {
+          window.location.href = `/dashboard-page?id=${data.id}`;
         } else {
           // Padrão ou tipo 'user'
           window.location.href = `/dashboard?id=${data.id}`;

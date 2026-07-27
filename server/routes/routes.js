@@ -2,6 +2,14 @@ const routes = require('express').Router();
 const { registerController, loginController, registerMaster } = require('../controllers/authcontrollers');
 const { createSubs, getAllSubs, getSubsById, updateSubs } = require('../controllers/subsControllers');
 const notificationController = require('../controllers/Notifications');
+const pageController = require('../controllers/PageControllers');
+
+routes.post('/pages', pageController.createPages);
+routes.get('/pages', pageController.getAllPages);
+routes.get('/pages/:id', pageController.getPagesById);
+routes.put('/pages/:id', pageController.updatePages);
+routes.delete('/pages/:id', pageController.deletePages);
+
 routes.post('/subs', createSubs);
 routes.get('/subs', getAllSubs);
 routes.get('/subs/:id', getSubsById);

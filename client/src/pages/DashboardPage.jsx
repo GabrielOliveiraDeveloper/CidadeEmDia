@@ -17,11 +17,12 @@ import {
   MapPin,
   Bell,
   Compass,
-  Building2
+  Building2,
+  Award
 } from 'lucide-react';
 import { Map, useMap } from '@vis.gl/react-google-maps';
 
-// Tratamento robusto de coordenadas vindas do banco de dados (Objetos ou Arrays GeoJSON)
+// Tratamento de coordenadas vindas do banco de dados (Objetos ou Arrays GeoJSON)
 const getCoords = (post) => {
   if (!post || !post.coordinates) return null;
   
@@ -42,7 +43,7 @@ const getCoords = (post) => {
   return null;
 };
 
-// Subcomponente de visualização idêntico à estratégia do Dashboard funcional
+// Componente de controle e visualização do mapa
 const ViewMapController = ({ coordenadas }) => {
   const map = useMap();
 
@@ -68,7 +69,7 @@ const ViewMapController = ({ coordenadas }) => {
   );
 };
 
-// Componente utilitário idêntico ao do Dashboard para fixar o marcador HTML nas coordenadas
+// Marcador customizado no mapa
 const CustomHtmlMarker = ({ map, position }) => {
   const [pixelPosition, setPixelPosition] = useState(null);
 
@@ -129,18 +130,20 @@ const CustomHtmlMarker = ({ map, position }) => {
   );
 };
 
-const DashboardSub = () => {
-  const getSubId = () => {
+const DashboardPage = () => {
+  // Pega o ID da URL ou localStorage (mesmo padrão dos outros Dashboards)
+  const getPageId = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const idFromUrl = urlParams.get('id');
     if (idFromUrl) return idFromUrl;
     
-    return localStorage.getItem('@Cidademdia:userId') || 'Sub';
+    return localStorage.getItem('@Cidademdia:pageId') || localStorage.getItem('@Cidademdia:userId') || 'Page';
   };
 
-  const subId = getSubId();
+  const pageId = getPageId();
 
-  const [activeTab, setActiveTab] = useState('subs');
+  // Estados principais
+  const [activeTab, setActiveTab] = useState('subs'); // 'subs' | 'protocols' | 'profile'
   const [subs, setSubs] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [notifications, setNotifications] = useState([]);
@@ -148,8 +151,9 @@ const DashboardSub = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [protocolsLoading, setProtocolsLoading] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [pageProfile, setPageProfile] = useState(null);
 
-  // Estados para gerenciar Tipo de Perfil e Opções
+  // Estados do tipo de conta e formulário sidebar
   const [accountType, setAccountType] = useState('sub'); // 'sub' | 'institutional'
   const [institutionalOption, setInstitutionalOption] = useState('Secretaria');
   const [customTitle, setCustomTitle] = useState('');
@@ -162,19 +166,49 @@ const DashboardSub = () => {
     managedArea: ''
   });
 
+  // Estado para alteração de perfil da própria página
+  const [profileFormData, setProfileFormData] = useState({
+    title: '',
+    email: '',
+    password: '',
+    imageProfile: '',
+    managedArea: ''
+  });
+
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
 
-  // Busca integrada de Sub-Contas e Páginas Institucionais (localhost:3000)
+  // Busca do perfil da própria página
+  const fetchPageProfile = async () => {
+    try {
+      const response = await fetch(`http://localhost:3000/pages/${pageId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setPageProfile(data);
+        setProfileFormData({
+          title: data.tittle || data.title || '',
+          email: data.email || '',
+          password: '',
+          imageProfile: data.imageProfile || '',
+          managedArea: data.managedArea || ''
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao buscar perfil da página:', error);
+    }
+  };
+
+  // Busca de Sub-Contas (Render) e Páginas Institucionais (localhost:3000)
   const fetchSubsAndPages = async () => {
     try {
       setFetchLoading(true);
 
-      // 1. Busca Sub-Contas vinculadas
+      // 1. Busca Sub-Contas
       let subsData = [];
       try {
-        const response = await fetch(`https://cidadeemdia.onrender.com/subs/master/${subId}`);
+        const response = await fetch(`https://cidadeemdia.onrender.com/subs/master/${pageId}`);
         if (response.ok) {
           const data = await response.json();
           subsData = data.map(item => ({ ...item, accountType: 'sub' }));
@@ -205,7 +239,7 @@ const DashboardSub = () => {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch(`https://cidadeemdia.onrender.com/notifications/${subId}`);
+      const response = await fetch(`https://cidadeemdia.onrender.com/notifications/${pageId}`);
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
@@ -247,7 +281,8 @@ const DashboardSub = () => {
   };
 
   useEffect(() => {
-    if (subId && subId !== 'Sub') {
+    if (pageId && pageId !== 'Page') {
+      fetchPageProfile();
       fetchSubsAndPages();
       fetchNotifications();
       
@@ -256,8 +291,9 @@ const DashboardSub = () => {
     } else {
       setFetchLoading(false);
     }
-  }, [subId]);
+  }, [pageId]);
 
+  // Handlers para formulário na sidebar
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -286,12 +322,12 @@ const DashboardSub = () => {
     if (fileInput) fileInput.value = '';
   };
 
+  // Salvar Sub-Conta ou Página Institucional
   const handleSaveSub = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage({ type: '', text: '' });
 
-    // Determina o título final com base no tipo de conta
     const finalTitle = accountType === 'institutional' 
       ? (institutionalOption === 'Outro' ? customTitle : institutionalOption)
       : formData.tittle;
@@ -305,7 +341,7 @@ const DashboardSub = () => {
     const isEditing = editingId !== null;
     const isInstitutional = accountType === 'institutional';
 
-    // Roteamento de Endpoints: Localhost para Páginas e Render para Subs
+    // Endpoints distintos: Localhost para Páginas Institucionais e Render para Sub-Contas
     const url = isInstitutional
       ? (isEditing ? `http://localhost:3000/pages/${editingId}` : 'http://localhost:3000/pages')
       : (isEditing ? `https://cidadeemdia.onrender.com/subs/${editingId}` : 'https://cidadeemdia.onrender.com/subs');
@@ -320,7 +356,7 @@ const DashboardSub = () => {
       imageProfile: formData.imageProfile,
       managedArea: formData.managedArea,
       accountType: accountType,
-      ...(!isEditing && { idMaster: subId })
+      ...(!isEditing && { idMaster: pageId }) // Atribui idMaster com o ID capturado da URL/pageId
     };
 
     try {
@@ -406,15 +442,12 @@ const DashboardSub = () => {
 
     if (!window.confirm(`Tem certeza que deseja remover este registro (${isInstitutional ? 'Página Institucional' : 'Sub-Conta'})?`)) return;
 
-    // Roteamento do DELETE
     const url = isInstitutional 
       ? `http://localhost:3000/pages/${id}`
       : `https://cidadeemdia.onrender.com/subs/${id}`;
 
     try {
-      const response = await fetch(url, {
-        method: 'DELETE'
-      });
+      const response = await fetch(url, { method: 'DELETE' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Erro ao deletar registro');
       
@@ -424,8 +457,61 @@ const DashboardSub = () => {
     }
   };
 
+  // Handlers para o perfil da própria página
+  const handleProfileInputChange = (e) => {
+    const { name, value } = e.target;
+    setProfileFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleProfileFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setProfileMessage({ type: 'error', text: 'Por favor, selecione apenas imagens.' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfileFormData(prev => ({ ...prev, imageProfile: reader.result }));
+      setProfileMessage({ type: '', text: '' });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSavePageProfile = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setProfileMessage({ type: '', text: '' });
+
+    const bodyData = {
+      tittle: profileFormData.title,
+      title: profileFormData.title,
+      email: profileFormData.email,
+      ...(profileFormData.password && { password: profileFormData.password }),
+      imageProfile: profileFormData.imageProfile,
+      managedArea: profileFormData.managedArea,
+      accountType: 'institutional'
+    };
+
+    try {
+      const response = await fetch(`http://localhost:3000/pages/${pageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData)
+      });
+      if (!response.ok) throw new Error('Erro ao atualizar perfil.');
+      setProfileMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
+      fetchPageProfile();
+    } catch (error) {
+      setProfileMessage({ type: 'error', text: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('@Cidademdia:token');
+    localStorage.removeItem('@Cidademdia:pageId');
     localStorage.removeItem('@Cidademdia:userId');
     window.location.href = '/login';
   };
@@ -450,7 +536,7 @@ const DashboardSub = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 antialiased font-sans">
-      <header className="bg-gradient-to-r from-green-700 via-green-600 to-blue-700 text-white shadow-md relative z-50">
+      <header className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-md relative z-50">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-yellow-400"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -459,7 +545,7 @@ const DashboardSub = () => {
                 Cidade<span className="text-yellow-400">em</span>dia
               </h1>
               <p className="text-xs text-yellow-300 font-semibold uppercase tracking-wider flex items-center gap-1">
-                <Shield className="w-3 h-3" /> Painel de Controle Sub
+                <Building2 className="w-3.5 h-3.5" /> Painel de Página Institucional
               </p>
             </div>
           </div>
@@ -521,14 +607,15 @@ const DashboardSub = () => {
               )}
             </div>
 
-            <span className="text-sm font-medium text-blue-50 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10">
-              Fiscal ID: <span className="font-mono text-yellow-300">{subId && subId !== 'Sub' ? subId.slice(-6) : 'Sub'}</span>
+            <span className="text-sm font-medium text-blue-50 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-yellow-400" />
+              Página ID: <span className="font-mono text-yellow-300">{pageId && pageId !== 'Page' ? String(pageId).slice(-6) : 'Page'}</span>
             </span>
 
             <button 
               onClick={handleLogout}
               className="p-2 text-blue-100 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
-              title="Sair do painel sub"
+              title="Sair do painel"
             >
               <LogOut className="w-5 h-5" />
             </button>
@@ -536,6 +623,7 @@ const DashboardSub = () => {
         </div>
       </header>
 
+      {/* Modal do Detalhe da Ocorrência */}
       {selectedPost && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden relative flex flex-col max-h-[90vh]">
@@ -560,7 +648,7 @@ const DashboardSub = () => {
             <div className="p-6 space-y-5 overflow-y-auto flex-1">
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-red-500" /> Localização Georreferenciada (Apenas Leitura)
+                  <MapPin className="w-3.5 h-3.5 text-red-500" /> Localização Georreferenciada
                 </span>
                 <div className="w-full h-44 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative shadow-inner">
                   <ViewMapController coordenadas={parsedCoordinates} />
@@ -629,6 +717,7 @@ const DashboardSub = () => {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Sidebar – Formulário Único com Alternador entre Sub-Conta e Página Institucional */}
         <section className="lg:col-span-1">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 space-y-5 sticky top-6">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -708,6 +797,7 @@ const DashboardSub = () => {
                 <input id="sub-avatar-upload" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
               </div>
 
+              {/* Input Dinâmico conforme tipo de formulário */}
               {accountType === 'sub' ? (
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Título / Nome</label>
@@ -758,7 +848,7 @@ const DashboardSub = () => {
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Área Gerenciada / Setor</label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                  <input type="text" name="managedArea" required value={formData.managedArea} onChange={handleInputChange} placeholder="Ex: Secretaria de Obras, Zona Sul" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
+                  <input type="text" name="managedArea" required value={formData.managedArea} onChange={handleInputChange} placeholder="Ex: Obras, Habitação, Zona Sul" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
                 </div>
               </div>
 
@@ -766,12 +856,12 @@ const DashboardSub = () => {
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">E-mail Corporativo</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                  <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder="subconta@cidademdia.com" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
+                  <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder="institucional@cidademdia.com" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{editingId ? 'Nova Senha (Opcional)' : 'Senha do Sub'}</label>
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{editingId ? 'Nova Senha (Opcional)' : 'Senha de Acesso'}</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                   <input type="password" name="password" required={!editingId} value={formData.password} onChange={handleInputChange} placeholder="••••••••" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
@@ -785,24 +875,14 @@ const DashboardSub = () => {
           </div>
         </section>
 
+        {/* Seção Principal de Conteúdo */}
         <section className="lg:col-span-2 space-y-6">
           <div className="bg-gradient-to-r from-slate-900 to-blue-900 text-white p-6 rounded-2xl shadow-sm border border-slate-800">
-            <h2 className="text-xl font-bold tracking-tight">Painel Operacional Sub 👋</h2>
-            <p className="text-xs text-slate-300 font-light mt-1">Alternar modos operacionais abaixo para visualizar dados brutos da prefeitura ou gerenciar chaves de acesso vinculadas.</p>
+            <h2 className="text-xl font-bold tracking-tight">Painel da Página Institucional 👋</h2>
+            <p className="text-xs text-slate-300 font-light mt-1">Gerencie suas contas associadas, crie páginas institucionais e monitore ocorrências públicas.</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <button 
-              onClick={handleOpenProtocolsTab}
-              className={`p-4 rounded-xl border shadow-sm flex items-center gap-3 text-left transition-all ${activeTab === 'protocols' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' : 'bg-white border-slate-200/60 hover:bg-slate-50'}`}
-            >
-              <div className="p-2.5 bg-blue-600 text-white rounded-lg"><FileText className="w-5 h-5" /></div>
-              <div>
-                <h4 className="text-xs font-bold text-slate-800">Visualizar Protocolos</h4>
-                <p className="text-[10px] text-slate-400 font-medium">Histórico de Ocorrências</p>
-              </div>
-            </button>
-            
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button 
               onClick={() => setActiveTab('subs')}
               className={`p-4 rounded-xl border shadow-sm flex items-center gap-3 text-left transition-all ${activeTab === 'subs' ? 'bg-green-50 border-green-300 ring-2 ring-green-500/20' : 'bg-white border-slate-200/60 hover:bg-slate-50'}`}
@@ -813,8 +893,97 @@ const DashboardSub = () => {
                 <p className="text-[10px] text-slate-400 font-medium">Subs e Páginas Institucionais</p>
               </div>
             </button>
+
+            <button 
+              onClick={handleOpenProtocolsTab}
+              className={`p-4 rounded-xl border shadow-sm flex items-center gap-3 text-left transition-all ${activeTab === 'protocols' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' : 'bg-white border-slate-200/60 hover:bg-slate-50'}`}
+            >
+              <div className="p-2.5 bg-blue-600 text-white rounded-lg"><FileText className="w-5 h-5" /></div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-800">Protocolos Recebidos</h4>
+                <p className="text-[10px] text-slate-400 font-medium">Histórico de Ocorrências</p>
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab('profile')}
+              className={`p-4 rounded-xl border shadow-sm flex items-center gap-3 text-left transition-all ${activeTab === 'profile' ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-500/20' : 'bg-white border-slate-200/60 hover:bg-slate-50'}`}
+            >
+              <div className="p-2.5 bg-indigo-700 text-white rounded-lg"><Edit3 className="w-5 h-5" /></div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-800">Perfil da Página</h4>
+                <p className="text-[10px] text-slate-400 font-medium">Editar Perfil Institucional</p>
+              </div>
+            </button>
           </div>
 
+          {/* Aba de Gerenciamento de Contas e Páginas */}
+          {activeTab === 'subs' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pb-1">
+                <Users className="w-5 h-5 text-green-700" />
+                <h3 className="font-bold text-slate-800 text-lg">Sub-contas e Páginas Administradas</h3>
+              </div>
+
+              {fetchLoading ? (
+                <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-7 h-7 animate-spin text-blue-600" />
+                  <p className="text-sm text-slate-500">Carregando registros...</p>
+                </div>
+              ) : subs.length === 0 ? (
+                <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
+                  <p className="text-slate-400 font-medium text-sm">Nenhuma sub-conta ou página institucional cadastrada no momento.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {subs.map((sub) => {
+                    const itemId = sub._id || sub.id;
+                    const displayTitle = sub.tittle || sub.title || 'Sem Título';
+                    const isInst = sub.accountType === 'institutional' || [
+                      'Secretaria', 'Sub secretaria', 'Assembleia', 'Sub prefeitura', 
+                      'Prefeitura', 'Diretoria', 'Câmara de vereadores'
+                    ].includes(displayTitle);
+
+                    return (
+                      <div key={itemId} className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                        <div className="flex items-start gap-3">
+                          {sub.imageProfile ? (
+                            <img src={sub.imageProfile} alt={displayTitle} className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 font-bold text-sm uppercase flex-shrink-0">
+                              {displayTitle.slice(0, 2)}
+                            </div>
+                          )}
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="text-sm font-bold text-slate-800 truncate">{displayTitle}</h4>
+                              {isInst && (
+                                <span className="text-[9px] bg-purple-50 text-purple-700 font-bold px-1.5 py-0.5 rounded border border-purple-200 uppercase">
+                                  Institucional (Local)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 truncate flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" /> {sub.email}</p>
+                            {sub.managedArea && <p className="text-[11px] text-blue-600 font-semibold truncate mt-1 flex items-center gap-0.5"><MapPin className="w-3 h-3" /> {sub.managedArea}</p>}
+                          </div>
+                        </div>
+
+                        <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-medium">
+                          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-mono">ID: {itemId ? String(itemId).slice(-6) : '...'}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => handleStartEdit(sub)} className="text-slate-500 hover:text-blue-600 p-1.5 rounded-lg hover:bg-blue-50 flex items-center gap-1 text-[11px]"><Edit3 className="w-3.5 h-3.5" /> Editar</button>
+                            <button onClick={() => handleDeleteSub(sub)} className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 flex items-center gap-1 text-[11px]"><Trash2 className="w-3.5 h-3.5" /> Deletar</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Aba de Histórico de Ocorrências / Protocolos */}
           {activeTab === 'protocols' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between pb-1">
@@ -830,11 +999,11 @@ const DashboardSub = () => {
               {protocolsLoading ? (
                 <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-2">
                   <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-                  <p className="text-sm text-slate-500">Varrendo chaves e links de notificações registradas...</p>
+                  <p className="text-sm text-slate-500">Varrendo ocorrências registradas...</p>
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
-                  <p className="text-slate-400 font-medium text-sm">Nenhum protocolo ou link de notificação emitido para este Gerente.</p>
+                  <p className="text-slate-400 font-medium text-sm">Nenhum protocolo ou notificação emitida para esta Página Institucional.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -893,68 +1062,97 @@ const DashboardSub = () => {
             </div>
           )}
 
-          {activeTab === 'subs' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 pb-1">
-                <Users className="w-5 h-5 text-green-700" />
-                <h3 className="font-bold text-slate-800 text-lg">Sub-contas e Páginas Administradas</h3>
-              </div>
+          {/* Aba de Edição do Perfil da Própria Página */}
+          {activeTab === 'profile' && (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-6">
+              <h3 className="font-bold text-slate-800 text-lg border-b pb-4">Editar Configurações da Página</h3>
 
-              {fetchLoading ? (
-                <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-2">
-                  <Loader2 className="w-7 h-7 animate-spin text-blue-600" />
-                  <p className="text-sm text-slate-500">Carregando lista de contas subordinadas...</p>
-                </div>
-              ) : subs.length === 0 ? (
-                <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
-                  <p className="text-slate-400 font-medium text-sm">Nenhuma sub-conta ou página institucional cadastrada no momento.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {subs.map((sub) => {
-                    const itemId = sub._id || sub.id;
-                    const displayTitle = sub.tittle || sub.title || 'Sem Título';
-                    const isInst = sub.accountType === 'institutional' || [
-                      'Secretaria', 'Sub secretaria', 'Assembleia', 'Sub prefeitura', 
-                      'Prefeitura', 'Diretoria', 'Câmara de vereadores'
-                    ].includes(displayTitle);
-
-                    return (
-                      <div key={itemId} className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-                        <div className="flex items-start gap-3">
-                          {sub.imageProfile ? (
-                            <img src={sub.imageProfile} alt={displayTitle} className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0" />
-                          ) : (
-                            <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 font-bold text-sm uppercase flex-shrink-0">
-                              {displayTitle.slice(0, 2)}
-                            </div>
-                          )}
-                          <div className="space-y-0.5 min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <h4 className="text-sm font-bold text-slate-800 truncate">{displayTitle}</h4>
-                              {isInst && (
-                                <span className="text-[9px] bg-purple-50 text-purple-700 font-bold px-1.5 py-0.5 rounded border border-purple-200 uppercase">
-                                  Institucional (Local)
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-500 truncate flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" /> {sub.email}</p>
-                            {sub.managedArea && <p className="text-[11px] text-blue-600 font-semibold truncate mt-1 flex items-center gap-0.5"><MapPin className="w-3 h-3" /> {sub.managedArea}</p>}
-                          </div>
-                        </div>
-
-                        <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-medium">
-                          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-mono">ID: {itemId ? String(itemId).slice(-6) : '...'}</span>
-                          <div className="flex items-center gap-1.5">
-                            <button onClick={() => handleStartEdit(sub)} className="text-slate-500 hover:text-blue-600 p-1.5 rounded-lg hover:bg-blue-50 flex items-center gap-1 text-[11px]"><Edit3 className="w-3.5 h-3.5" /> Editar</button>
-                            <button onClick={() => handleDeleteSub(sub)} className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 flex items-center gap-1 text-[11px]"><Trash2 className="w-3.5 h-3.5" /> Deletar</button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              {profileMessage.text && (
+                <div className={`p-4 rounded-xl flex items-center gap-2 text-sm font-medium ${
+                  profileMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                  {profileMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                  <span>{profileMessage.text}</span>
                 </div>
               )}
+
+              <form onSubmit={handleSavePageProfile} className="space-y-4">
+                <div className="flex flex-col items-center space-y-2">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Imagem da Instituição</label>
+                  <div className="relative group">
+                    {profileFormData.imageProfile ? (
+                      <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-blue-600 shadow-sm">
+                        <img src={profileFormData.imageProfile} alt="Perfil" className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => setProfileFormData(p => ({ ...p, imageProfile: '' }))} className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 text-white rounded-full transition-opacity">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label htmlFor="page-avatar-upload" className="w-24 h-24 rounded-full bg-slate-50 border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all">
+                        <Upload className="w-6 h-6 text-slate-400" />
+                        <span className="text-[10px] font-medium text-slate-500 mt-1">Upload</span>
+                      </label>
+                    )}
+                  </div>
+                  <input id="page-avatar-upload" type="file" accept="image/*" onChange={handleProfileFileChange} className="hidden" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 uppercase">Nome da Instituição</label>
+                  <input
+                    type="text"
+                    name="title"
+                    required
+                    value={profileFormData.title}
+                    onChange={handleProfileInputChange}
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 uppercase">Área de Atuação Principal</label>
+                  <input
+                    type="text"
+                    name="managedArea"
+                    required
+                    value={profileFormData.managedArea}
+                    onChange={handleProfileInputChange}
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 uppercase">E-mail de Contato</label>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    value={profileFormData.email}
+                    onChange={handleProfileInputChange}
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 uppercase">Nova Senha (opcional)</label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={profileFormData.password}
+                    onChange={handleProfileInputChange}
+                    placeholder="Deixe em branco para manter a atual"
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full text-white font-bold py-3 rounded-xl text-sm bg-blue-800 hover:bg-blue-900 transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Salvar Alterações'}
+                </button>
+              </form>
             </div>
           )}
         </section>
@@ -963,4 +1161,4 @@ const DashboardSub = () => {
   );
 };
 
-export default DashboardSub;
+export default DashboardPage;

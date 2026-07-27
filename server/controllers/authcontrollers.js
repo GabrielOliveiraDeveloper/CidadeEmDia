@@ -2,6 +2,7 @@ const { Resend } = require('resend');
 const User = require('../models/User');
 const Master = require('../models/Master');
 const Subs = require('../models/Subs');
+const Pages = require('../models/Pages');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
@@ -66,6 +67,11 @@ const loginController = async (req, res) => {
         if (!account) {
             account = await Subs.findOne({ email });
             role = 'subs';
+        }
+
+        if (!account) {
+            account = await Pages.findOne({ email });
+            role = 'pages';
         }
 
         if (!account) {

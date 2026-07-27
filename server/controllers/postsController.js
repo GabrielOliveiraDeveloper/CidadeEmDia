@@ -2,6 +2,7 @@ const Post = require('../models/Post'); // Certifique-se de que no model está u
 const Master = require('../models/Master');
 const Subs = require('../models/Subs');
 const Notification = require('../models/Notifications');
+const Pages = require('../models/Pages');
 
 const createPost = async (req, res) => {
     try {
@@ -128,6 +129,15 @@ const getManagedAreaByCity = async (req, res) => {
             if (s.managedArea) {
                 areasSet.add(s.managedArea.trim());
             }
+        });
+
+        const pages = await Pages.find({ city: { $regex: new RegExp(`^${city}$`, 'i') } });
+
+        pages.forEach(p => {
+            if (p.managedArea) {
+                areasSet.add(p.managedArea.trim());
+            }
+
         });
 
         const managedAreasDisponiveis = Array.from(areasSet).filter(

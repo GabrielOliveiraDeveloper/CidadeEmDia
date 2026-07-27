@@ -6,6 +6,7 @@ import RegisterMaster from './pages/RegisterMaster';
 import Dashboard from './pages/Dashboard';
 import DashboardMaster from './pages/DashboardMaster';
 import DashboardSub from './pages/DashboardSub';
+import DashboardPage from './pages/DashboardPage';
 
 function App() {
     return (
@@ -20,6 +21,7 @@ function App() {
                     <Route path='/dashboard' element={<Dashboard />} />
                     <Route path="/master-dashboard" element={<DashboardMaster />} />
                     <Route path="/subs-dashboard" element={<DashboardSub />} />
+                    <Route path="/dashboard-page" element={<DashboardPage />} />
                 </Routes>
             </BrowserRouter>
         </APIProvider>

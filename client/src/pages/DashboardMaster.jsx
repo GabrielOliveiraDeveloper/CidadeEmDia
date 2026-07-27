@@ -16,7 +16,8 @@ import {
   FileText,
   MapPin,
   Bell,
-  Compass
+  Compass,
+  Building2
 } from 'lucide-react';
 import { Map, useMap } from '@vis.gl/react-google-maps';
 
@@ -148,6 +149,11 @@ const DashboardMaster = () => {
   const [protocolsLoading, setProtocolsLoading] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
 
+  // Estados para gerenciar Tipo de Perfil e Opções
+  const [accountType, setAccountType] = useState('sub'); // 'sub' | 'institutional'
+  const [institutionalOption, setInstitutionalOption] = useState('Secretaria');
+  const [customTitle, setCustomTitle] = useState('');
+
   const [formData, setFormData] = useState({
     tittle: '',
     email: '',
@@ -160,18 +166,39 @@ const DashboardMaster = () => {
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const fetchSubs = async () => {
+  // Busca integrada de Sub-Contas (Nuvem) e Páginas Institucionais (localhost:3000)
+  const fetchSubsAndPages = async () => {
     try {
       setFetchLoading(true);
-      const response = await fetch(`https://cidadeemdia.onrender.com/subs/master/${masterId}`);
-      const data = await response.json();
-      if (response.ok) {
-        setSubs(data);
-      } else {
-        throw new Error(data.message || 'Erro ao buscar sub-contas');
+
+      // 1. Busca Sub-Contas
+      let subsData = [];
+      try {
+        const response = await fetch(`https://cidadeemdia.onrender.com/subs/master/${masterId}`);
+        if (response.ok) {
+          const data = await response.json();
+          subsData = data.map(item => ({ ...item, accountType: 'sub' }));
+        }
+      } catch (err) {
+        console.error('Erro ao buscar sub-contas:', err);
       }
+
+      // 2. Busca Páginas Institucionais (localhost:3000/pages)
+      let pagesData = [];
+      try {
+        const pageResponse = await fetch(`http://localhost:3000/pages`);
+        if (pageResponse.ok) {
+          const data = await pageResponse.json();
+          pagesData = data.map(item => ({ ...item, accountType: 'institutional' }));
+        }
+      } catch (err) {
+        console.error('Erro ao buscar páginas institucionais em localhost:3000:', err);
+      }
+
+      // Consolida os dois resultados no mesmo estado da interface
+      setSubs([...subsData, ...pagesData]);
     } catch (error) {
-      console.error(error);
+      console.error('Erro geral ao recarregar dados:', error);
     } finally {
       setFetchLoading(false);
     }
@@ -222,7 +249,7 @@ const DashboardMaster = () => {
 
   useEffect(() => {
     if (masterId && masterId !== 'Master') {
-      fetchSubs();
+      fetchSubsAndPages();
       fetchNotifications();
       
       const interval = setInterval(fetchNotifications, 30000);
@@ -265,19 +292,35 @@ const DashboardMaster = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
+    // Determina o título final com base no tipo de conta e seleção
+    const finalTitle = accountType === 'institutional' 
+      ? (institutionalOption === 'Outro' ? customTitle : institutionalOption)
+      : formData.tittle;
+
+    if (!finalTitle || finalTitle.trim() === '') {
+      setMessage({ type: 'error', text: 'Por favor, informe o título/nome para prosseguir.' });
+      setLoading(false);
+      return;
+    }
+
     const isEditing = editingId !== null;
-    const url = isEditing 
-      ? `https://cidadeemdia.onrender.com/subs/${editingId}` 
-      : 'https://cidadeemdia.onrender.com/subs';
+    const isInstitutional = accountType === 'institutional';
+
+    // Roteamento de Endpoints: Localhost para Páginas e Render para Subs
+    const url = isInstitutional
+      ? (isEditing ? `http://localhost:3000/pages/${editingId}` : 'http://localhost:3000/pages')
+      : (isEditing ? `https://cidadeemdia.onrender.com/subs/${editingId}` : 'https://cidadeemdia.onrender.com/subs');
     
     const method = isEditing ? 'PUT' : 'POST';
 
     const bodyData = {
-      tittle: formData.tittle,
+      tittle: finalTitle,
+      title: finalTitle, // Compatibilidade adicional caso sua controller utilize `title`
       email: formData.email,
       password: formData.password,
       imageProfile: formData.imageProfile,
       managedArea: formData.managedArea,
+      accountType: accountType,
       ...(!isEditing && { idMaster: masterId })
     };
 
@@ -293,13 +336,18 @@ const DashboardMaster = () => {
 
       setMessage({ 
         type: 'success', 
-        text: isEditing ? 'Sub-conta atualizada com sucesso!' : 'Sub-conta criada com sucesso!' 
+        text: isEditing 
+          ? (isInstitutional ? 'Página Institucional atualizada com sucesso!' : 'Sub-conta atualizada com sucesso!')
+          : (isInstitutional ? 'Página Institucional criada em localhost:3000!' : 'Sub-conta criada com sucesso!') 
       });
 
       setFormData({ tittle: '', email: '', password: '', imageProfile: '', managedArea: '' });
+      setAccountType('sub');
+      setInstitutionalOption('Secretaria');
+      setCustomTitle('');
       setEditingId(null);
       handleRemoveImage();
-      fetchSubs();
+      fetchSubsAndPages();
     } catch (error) {
       setMessage({ type: 'error', text: error.message });
     } finally {
@@ -308,10 +356,34 @@ const DashboardMaster = () => {
   };
 
   const handleStartEdit = (sub) => {
-    setEditingId(sub._id);
+    const itemId = sub._id || sub.id;
+    setEditingId(itemId);
+
+    const presetInstitutionalOptions = [
+      'Secretaria', 'Sub secretaria', 'Assembleia', 'Sub prefeitura', 
+      'Prefeitura', 'Diretoria', 'Câmara de vereadores'
+    ];
+
+    const currentTitle = sub.tittle || sub.title || '';
+
+    if (sub.accountType === 'institutional' || presetInstitutionalOptions.includes(currentTitle)) {
+      setAccountType('institutional');
+      if (presetInstitutionalOptions.includes(currentTitle)) {
+        setInstitutionalOption(currentTitle);
+        setCustomTitle('');
+      } else {
+        setInstitutionalOption('Outro');
+        setCustomTitle(currentTitle);
+      }
+    } else {
+      setAccountType('sub');
+      setInstitutionalOption('Secretaria');
+      setCustomTitle('');
+    }
+
     setFormData({
-      tittle: sub.tittle,
-      email: sub.email,
+      tittle: currentTitle,
+      email: sub.email || '',
       password: '', 
       imageProfile: sub.imageProfile || '',
       managedArea: sub.managedArea || ''
@@ -323,19 +395,31 @@ const DashboardMaster = () => {
   const handleCancelEdit = () => {
     setEditingId(null);
     setFormData({ tittle: '', email: '', password: '', imageProfile: '', managedArea: '' });
+    setAccountType('sub');
+    setInstitutionalOption('Secretaria');
+    setCustomTitle('');
     handleRemoveImage();
   };
 
-  const handleDeleteSub = async (id) => {
-    if (!window.confirm('Tem certeza absoluta que deseja remover esta sub-conta gerenciada?')) return;
+  const handleDeleteSub = async (sub) => {
+    const id = sub._id || sub.id;
+    const isInstitutional = sub.accountType === 'institutional';
+
+    if (!window.confirm(`Tem certeza que deseja remover este registro (${isInstitutional ? 'Página Institucional' : 'Sub-Conta'})?`)) return;
+
+    // Roteamento do DELETE
+    const url = isInstitutional 
+      ? `http://localhost:3000/pages/${id}`
+      : `https://cidadeemdia.onrender.com/subs/${id}`;
 
     try {
-      const response = await fetch(`https://cidadeemdia.onrender.com/subs/${id}`, {
+      const response = await fetch(url, {
         method: 'DELETE'
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Erro ao deletar sub-conta');
-      setSubs(prev => prev.filter(sub => sub._id !== id));
+      if (!response.ok) throw new Error(data.message || 'Erro ao deletar registro');
+      
+      setSubs(prev => prev.filter(item => (item._id || item.id) !== id));
     } catch (error) {
       alert(error.message);
     }
@@ -479,7 +563,6 @@ const DashboardMaster = () => {
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-red-500" /> Localização Georreferenciada (Apenas Leitura)
                 </span>
-                {/* Ajustado com a mesma arquitetura do mapa funcional */}
                 <div className="w-full h-44 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative shadow-inner">
                   <ViewMapController coordenadas={parsedCoordinates} />
                 </div>
@@ -553,7 +636,9 @@ const DashboardMaster = () => {
               <div className="flex items-center gap-2">
                 <PlusCircle className={`w-5 h-5 ${editingId ? 'text-amber-500' : 'text-blue-600'}`} />
                 <h2 className="font-bold text-slate-800 text-lg">
-                  {editingId ? 'Editar Sub-Conta' : 'Nova Sub-Conta'}
+                  {editingId 
+                    ? (accountType === 'institutional' ? 'Editar Pág. Institucional' : 'Editar Sub-Conta') 
+                    : (accountType === 'institutional' ? 'Nova Pág. Institucional' : 'Nova Sub-Conta')}
                 </h2>
               </div>
               {editingId && (
@@ -564,6 +649,34 @@ const DashboardMaster = () => {
                   Cancelar
                 </button>
               )}
+            </div>
+
+            {/* Alternador de Tipo de Perfil */}
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => setAccountType('sub')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  accountType === 'sub' 
+                    ? 'bg-white text-blue-700 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Sub-Conta
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountType('institutional')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  accountType === 'institutional' 
+                    ? 'bg-white text-blue-700 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                Pág. Institucional
+              </button>
             </div>
 
             {message.text && (
@@ -577,7 +690,7 @@ const DashboardMaster = () => {
 
             <form onSubmit={handleSaveSub} className="space-y-4">
               <div className="flex flex-col items-center justify-center space-y-2 pb-2">
-                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block text-center w-full">Foto de Perfil</label>
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block text-center w-full">Foto / Brasão do Perfil</label>
                 <div className="relative group">
                   {formData.imageProfile ? (
                     <div className="relative w-20 h-20 rounded-full overflow-hidden border-4 border-blue-600 shadow-sm">
@@ -596,16 +709,58 @@ const DashboardMaster = () => {
                 <input id="sub-avatar-upload" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Título / Nome</label>
-                <input type="text" name="tittle" required value={formData.tittle} onChange={handleInputChange} placeholder="Ex: Fiscal Cleber - Zona Norte" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
-              </div>
+              {/* Título / Nome dinâmico dependendo do tipo selecionado */}
+              {accountType === 'sub' ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Título / Nome</label>
+                  <input 
+                    type="text" 
+                    name="tittle" 
+                    required 
+                    value={formData.tittle} 
+                    onChange={handleInputChange} 
+                    placeholder="Ex: Fiscal Cleber - Zona Norte" 
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" 
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Título / Nome (Institucional)</label>
+                  <select
+                    value={institutionalOption}
+                    onChange={(e) => setInstitutionalOption(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white font-medium"
+                  >
+                    <option value="Secretaria">Secretaria</option>
+                    <option value="Sub secretaria">Sub secretaria</option>
+                    <option value="Assembleia">Assembleia</option>
+                    <option value="Sub prefeitura">Sub prefeitura</option>
+                    <option value="Prefeitura">Prefeitura</option>
+                    <option value="Diretoria">Diretoria</option>
+                    <option value="Câmara de vereadores">Câmara de vereadores</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+
+                  {institutionalOption === 'Outro' && (
+                    <div className="pt-2">
+                      <input
+                        type="text"
+                        required
+                        value={customTitle}
+                        onChange={(e) => setCustomTitle(e.target.value)}
+                        placeholder="Digite o nome/título da instituição"
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Área Gerenciada / Setor</label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                  <input type="text" name="managedArea" required value={formData.managedArea} onChange={handleInputChange} placeholder="Ex: Secretaria de Obras, Zona Sul" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
+                  <input type="text" name="managedArea" required value={formData.managedArea} onChange={handleInputChange} placeholder="Ex: Obras, Habitação, Zona Sul" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
                 </div>
               </div>
 
@@ -613,12 +768,12 @@ const DashboardMaster = () => {
                 <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">E-mail Corporativo</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                  <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder="subconta@cidademdia.com" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
+                  <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder="institucional@cidademdia.com" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{editingId ? 'Nova Senha (Opcional)' : 'Senha do Sub'}</label>
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{editingId ? 'Nova Senha (Opcional)' : 'Senha de Acesso'}</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                   <input type="password" name="password" required={!editingId} value={formData.password} onChange={handleInputChange} placeholder="••••••••" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-blue-500 focus:bg-white" />
@@ -626,7 +781,7 @@ const DashboardMaster = () => {
               </div>
 
               <button type="submit" disabled={loading} className={`w-full text-white font-semibold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2 bg-gradient-to-r ${editingId ? 'from-amber-600 to-yellow-500' : 'from-blue-700 to-blue-600'}`}>
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : editingId ? 'Salvar Alterações' : 'Cadastrar Sub-Conta'}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : editingId ? 'Salvar Alterações' : (accountType === 'institutional' ? 'Cadastrar Pág. Institucional' : 'Cadastrar Sub-Conta')}
               </button>
             </form>
           </div>
@@ -656,8 +811,8 @@ const DashboardMaster = () => {
             >
               <div className="p-2.5 bg-green-700 text-white rounded-lg"><Users className="w-5 h-5" /></div>
               <div>
-                <h4 className="text-xs font-bold text-slate-800">Gerenciar Subs</h4>
-                <p className="text-[10px] text-slate-400 font-medium">Contas Vinculadas</p>
+                <h4 className="text-xs font-bold text-slate-800">Gerenciar Contas & Páginas</h4>
+                <p className="text-[10px] text-slate-400 font-medium">Subs e Páginas Institucionais</p>
               </div>
             </button>
           </div>
@@ -744,46 +899,62 @@ const DashboardMaster = () => {
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-1">
                 <Users className="w-5 h-5 text-green-700" />
-                <h3 className="font-bold text-slate-800 text-lg">Sub-contas Administradas</h3>
+                <h3 className="font-bold text-slate-800 text-lg">Sub-contas e Páginas Administradas</h3>
               </div>
 
               {fetchLoading ? (
                 <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-2">
                   <Loader2 className="w-7 h-7 animate-spin text-blue-600" />
-                  <p className="text-sm text-slate-500">Carregando lista de sub-contas subordinadas...</p>
+                  <p className="text-sm text-slate-500">Carregando lista de contas subordinadas...</p>
                 </div>
               ) : subs.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm">
-                  <p className="text-slate-400 font-medium text-sm">Nenhuma sub-conta criada vinculada a este painel Master.</p>
+                  <p className="text-slate-400 font-medium text-sm">Nenhuma sub-conta ou página institucional cadastrada no momento.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {subs.map((sub) => (
-                    <div key={sub._id} className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-                      <div className="flex items-start gap-3">
-                        {sub.imageProfile ? (
-                          <img src={sub.imageProfile} alt={sub.tittle} className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 font-bold text-sm uppercase flex-shrink-0">
-                            {sub.tittle ? sub.tittle.slice(0, 2) : 'SB'}
-                          </div>
-                        )}
-                        <div className="space-y-0.5 min-w-0 flex-1">
-                          <h4 className="text-sm font-bold text-slate-800 truncate">{sub.tittle}</h4>
-                          <p className="text-xs text-slate-500 truncate flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" /> {sub.email}</p>
-                          {sub.managedArea && <p className="text-[11px] text-blue-600 font-semibold truncate mt-1 flex items-center gap-0.5"><MapPin className="w-3 h-3" /> {sub.managedArea}</p>}
-                        </div>
-                      </div>
+                  {subs.map((sub) => {
+                    const itemId = sub._id || sub.id;
+                    const displayTitle = sub.tittle || sub.title || 'Sem Título';
+                    const isInst = sub.accountType === 'institutional' || [
+                      'Secretaria', 'Sub secretaria', 'Assembleia', 'Sub prefeitura', 
+                      'Prefeitura', 'Diretoria', 'Câmara de vereadores'
+                    ].includes(displayTitle);
 
-                      <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-medium">
-                        <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-mono">ID: {sub._id ? sub._id.slice(-6) : '...'}</span>
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => handleStartEdit(sub)} className="text-slate-500 hover:text-blue-600 p-1.5 rounded-lg hover:bg-blue-50 flex items-center gap-1 text-[11px]"><Edit3 className="w-3.5 h-3.5" /> Editar</button>
-                          <button onClick={() => handleDeleteSub(sub._id)} className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 flex items-center gap-1 text-[11px]"><Trash2 className="w-3.5 h-3.5" /> Deletar</button>
+                    return (
+                      <div key={itemId} className="bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                        <div className="flex items-start gap-3">
+                          {sub.imageProfile ? (
+                            <img src={sub.imageProfile} alt={displayTitle} className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 font-bold text-sm uppercase flex-shrink-0">
+                              {displayTitle.slice(0, 2)}
+                            </div>
+                          )}
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="text-sm font-bold text-slate-800 truncate">{displayTitle}</h4>
+                              {isInst && (
+                                <span className="text-[9px] bg-purple-50 text-purple-700 font-bold px-1.5 py-0.5 rounded border border-purple-200 uppercase">
+                                  Institucional (Local)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 truncate flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" /> {sub.email}</p>
+                            {sub.managedArea && <p className="text-[11px] text-blue-600 font-semibold truncate mt-1 flex items-center gap-0.5"><MapPin className="w-3 h-3" /> {sub.managedArea}</p>}
+                          </div>
+                        </div>
+
+                        <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-medium">
+                          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-mono">ID: {itemId ? String(itemId).slice(-6) : '...'}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => handleStartEdit(sub)} className="text-slate-500 hover:text-blue-600 p-1.5 rounded-lg hover:bg-blue-50 flex items-center gap-1 text-[11px]"><Edit3 className="w-3.5 h-3.5" /> Editar</button>
+                            <button onClick={() => handleDeleteSub(sub)} className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 flex items-center gap-1 text-[11px]"><Trash2 className="w-3.5 h-3.5" /> Deletar</button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
