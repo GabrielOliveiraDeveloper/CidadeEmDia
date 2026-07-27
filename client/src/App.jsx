@@ -7,7 +7,7 @@ import Dashboard from './pages/Dashboard';
 import DashboardMaster from './pages/DashboardMaster';
 import DashboardSub from './pages/DashboardSub';
 import DashboardPage from './pages/DashboardPage';
-
+import HomePage from './pages/HomePage';
 function App() {
     return (
         // O APIProvider envolve todo o ecossistema de rotas
@@ -22,6 +22,7 @@ function App() {
                     <Route path="/master-dashboard" element={<DashboardMaster />} />
                     <Route path="/subs-dashboard" element={<DashboardSub />} />
                     <Route path="/dashboard-page" element={<DashboardPage />} />
+                    <Route path="/home" element={<HomePage />} />
                 </Routes>
             </BrowserRouter>
         </APIProvider>
