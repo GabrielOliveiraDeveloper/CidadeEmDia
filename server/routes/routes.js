@@ -27,4 +27,36 @@ routes.delete('/posts/:id', require('../controllers/postsController').deletePost
 routes.get('/areas/:city', require('../controllers/postsController').getManagedAreaByCity);
 routes.get('/notifications/:id', notificationController.getNotifications);
 routes.get('/posts/:id', require('../controllers/postsController').getPostByID);
+
+routes.get('/getUserByID/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const user = await require('../models/User').findById(id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json(user);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error fetching user', error });
+    }
+});
+
+routes.get('/getMastersByID/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const master = await require('../models/Master').findById(id);
+
+        if (!master) {
+            return res.status(404).json({ message: 'Master not found' });
+        }
+
+        res.json(master);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error fetching master', error });
+    }
+});
+
 module.exports = routes;
