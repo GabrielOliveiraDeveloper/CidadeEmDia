@@ -59,4 +59,27 @@ routes.get('/getMastersByID/:id', async (req, res) => {
     }
 });
 
+routes.get('/returnAllMasters', async (req, res) => {
+    try {
+        const masters = await require('../models/Master').find();
+
+        res.json(masters);
+
+    } catch (error) {
+
+        res.status(500).json({ message: 'Error fetching masters', error });
+    }
+})
+
+routes.get('/returnAllUsers', async (req, res) => {
+    try {
+        const users = await require('../models/User').find();
+
+        res.json(users);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error fetching users', error });
+    }
+});
+
 module.exports = routes;

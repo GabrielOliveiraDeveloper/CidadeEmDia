@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Building2, 
@@ -14,12 +14,26 @@ import {
   Clock,
   ArrowRight,
   Compass,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  UserCheck,
+  Shield,
+  User,
+  GitMerge,
+  Eye,
+  Mail,
+  Phone,
+  Lock,
+  ExternalLink
 } from 'lucide-react';
 import { Map, useMap } from '@vis.gl/react-google-maps';
 
 // Importação da imagem da logo
 import logoImg from '../LOGO---CIDADEMDIA (1).png';
+
+// Base URL da API
+const API_BASE_URL = 'https://cidadeemdia.onrender.com';
 
 // Helper de conversão de coordenadas
 const getCoords = (post) => {
@@ -131,23 +145,37 @@ const CustomHtmlMarker = ({ map, position }) => {
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const carouselRef = useRef(null);
 
   // Estados para dados públicos
   const [posts, setPosts] = useState([]);
-  const [pages, setPages] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
-  const [loadingPages, setLoadingPages] = useState(true);
+  const [loadingProfiles, setLoadingProfiles] = useState(true);
 
   // Estados de busca
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const [selectedPost, setSelectedPost] = useState(null);
 
+  // Estados do fluxo de visualização de perfil (Login + Modal do Perfil)
+  const [targetProfile, setTargetProfile] = useState(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  // Estado do perfil autenticado após login master aprovado
+  const [viewingProfileData, setViewingProfileData] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
+  const [loadingUserPosts, setLoadingUserPosts] = useState(false);
+
   // Busca de postagens públicas
   const fetchPosts = async () => {
     try {
       setLoadingPosts(true);
-      const response = await fetch('https://cidadeemdia.onrender.com/posts');
+      const response = await fetch(`${API_BASE_URL}/posts`);
       if (response.ok) {
         const data = await response.json();
         setPosts(Array.isArray(data) ? data : []);
@@ -159,30 +187,195 @@ const HomePage = () => {
     }
   };
 
-  // Busca de páginas institucionais
-  const fetchPages = async () => {
+  // Busca e unificação de todos os perfis usando as rotas especificadas
+  const fetchAllProfiles = async () => {
     try {
-      setLoadingPages(true);
-      const response = await fetch('https://cidadeemdia.onrender.com/pages');
-      if (response.ok) {
-        const data = await response.json();
-        setPages(Array.isArray(data) ? data : []);
+      setLoadingProfiles(true);
+
+      const [pagesRes, subsRes, mastersRes, usersRes] = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/pages`),
+        fetch(`${API_BASE_URL}/subs`),
+        fetch(`${API_BASE_URL}/returnAllMasters`),
+        fetch(`${API_BASE_URL}/returnAllUsers`)
+      ]);
+
+      const fetchedProfiles = [];
+
+      // 1. Processa Páginas Institucionais
+      if (pagesRes.status === 'fulfilled' && pagesRes.value.ok) {
+        const pagesData = await pagesRes.value.json();
+        if (Array.isArray(pagesData)) {
+          pagesData.forEach(p => {
+            fetchedProfiles.push({
+              id: p._id || p.id,
+              name: p.tittle || p.title || 'Página Institucional',
+              imageProfile: p.imageProfile,
+              type: 'Página Institucional',
+              managedArea: p.managedArea,
+              city: p.city,
+              email: p.email,
+              tel: p.tel
+            });
+          });
+        }
       }
+
+      // 2. Processa Subcontas
+      if (subsRes.status === 'fulfilled' && subsRes.value.ok) {
+        const subsData = await subsRes.value.json();
+        if (Array.isArray(subsData)) {
+          subsData.forEach(s => {
+            fetchedProfiles.push({
+              id: s._id || s.id,
+              name: s.tittle || s.title || 'Subconta',
+              imageProfile: s.imageProfile,
+              type: 'Subconta',
+              managedArea: s.managedArea,
+              email: s.email,
+              tel: s.tel
+            });
+          });
+        }
+      }
+
+      // 3. Processa Masters (Rota /returnAllMasters)
+      if (mastersRes.status === 'fulfilled' && mastersRes.value.ok) {
+        const mastersData = await mastersRes.value.json();
+        if (Array.isArray(mastersData)) {
+          mastersData.forEach(m => {
+            fetchedProfiles.push({
+              id: m._id || m.id,
+              name: m.tittle || 'Conta Master',
+              imageProfile: m.imageProfile,
+              type: 'Conta Master',
+              managedArea: m.managedArea,
+              city: m.city,
+              email: m.email,
+              tel: m.tel || m.CPForCNPJ
+            });
+          });
+        }
+      }
+
+      // 4. Processa Usuários (Rota /returnAllUsers)
+      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+        const usersData = await usersRes.value.json();
+        if (Array.isArray(usersData)) {
+          usersData.forEach(u => {
+            fetchedProfiles.push({
+              id: u._id || u.id,
+              name: u.name || 'Usuário',
+              imageProfile: u.imageProfile,
+              type: 'Usuário',
+              email: u.email,
+              tel: u.tel
+            });
+          });
+        }
+      }
+
+      setProfiles(fetchedProfiles);
     } catch (error) {
-      console.error('Erro ao buscar páginas institucionais:', error);
+      console.error('Erro ao carregar perfis:', error);
     } finally {
-      setLoadingPages(false);
+      setLoadingProfiles(false);
     }
   };
 
   useEffect(() => {
     fetchPosts();
-    fetchPages();
+    fetchAllProfiles();
   }, []);
+
+  // Funções de rolagem do carrossel
+  const scrollCarousel = (direction) => {
+    if (carouselRef.current) {
+      const scrollAmount = direction === 'left' ? -300 : 300;
+      carouselRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     setActiveSearch(searchTerm);
+  };
+
+  // Ao clicar no botão "Ver perfil", abre o modal de validação de login Master
+  const handleOpenViewProfile = (profile) => {
+    setTargetProfile(profile);
+    setLoginEmail('');
+    setLoginPassword('');
+    setLoginError('');
+    setShowLoginModal(true);
+  };
+
+  // Requisição de Login para autorização Master
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+
+    if (!loginEmail || !loginPassword) {
+      setLoginError('Preencha o e-mail e a senha.');
+      return;
+    }
+
+    try {
+      setLoggingIn(true);
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setLoginError(data.message || 'E-mail ou senha inválidos.');
+        return;
+      }
+
+      // Validação estrita de permissão Master
+      if (data.role !== 'master') {
+        setLoginError('Acesso negado: Apenas contas Master têm permissão para visualizar perfis.');
+        return;
+      }
+
+      // Sucesso no login master: fecha modal de login e abre detalhes do perfil
+      setShowLoginModal(false);
+      openProfileDetails(targetProfile);
+
+    } catch (error) {
+      console.error('Erro ao realizar login:', error);
+      setLoginError('Erro ao conectar ao servidor. Tente novamente.');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  // Abre os detalhes do perfil e carrega os posts associados
+  const openProfileDetails = async (profile) => {
+    setViewingProfileData(profile);
+    setUserPosts([]);
+    
+    if (profile && profile.id) {
+      try {
+        setLoadingUserPosts(true);
+        const response = await fetch(`${API_BASE_URL}/posts/user/${profile.id}`);
+        if (response.ok) {
+          const postsData = await response.json();
+          setUserPosts(Array.isArray(postsData) ? postsData : []);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar postagens do usuário:', error);
+      } finally {
+        setLoadingUserPosts(false);
+      }
+    }
   };
 
   // Filtragem de Postagens com base na pesquisa confirmada
@@ -201,6 +394,37 @@ const HomePage = () => {
   const parsedCoordinates = selectedPost ? getCoords(selectedPost) : null;
   const temCep = selectedPost?.CEP || selectedPost?.cep;
 
+  // Helper para renderizar a badge correspondente ao tipo de perfil
+  const renderProfileBadge = (type) => {
+    switch (type) {
+      case 'Conta Master':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full border border-purple-200">
+            <Shield className="w-3 h-3 text-purple-600" /> Master
+          </span>
+        );
+      case 'Página Institucional':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
+            <Building2 className="w-3 h-3 text-blue-600" /> Institucional
+          </span>
+        );
+      case 'Subconta':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+            <GitMerge className="w-3 h-3 text-amber-600" /> Subconta
+          </span>
+        );
+      case 'Usuário':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200">
+            <User className="w-3 h-3 text-green-600" /> Usuário
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white antialiased font-sans flex flex-col">
       {/* Top Header / Navbar */}
@@ -217,7 +441,7 @@ const HomePage = () => {
             />
           </Link>
 
-          {/* Botões de Ação (Login, Cadastro e Cadastro Master) */}
+          {/* Botões de Ação */}
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
             <button 
               onClick={() => navigate('/login')} 
@@ -262,7 +486,7 @@ const HomePage = () => {
             Consulte protocolos, verifique demandas atendidas e navegue pelas secretarias e órgãos institucionais parceiros.
           </p>
 
-          {/* Form / Barra de Pesquisa com Botão de Confirmação */}
+          {/* Form / Barra de Pesquisa */}
           <form 
             onSubmit={handleSearchSubmit} 
             className="max-w-2xl mx-auto bg-white p-2 rounded-2xl border border-slate-200 shadow-xl flex flex-col sm:flex-row gap-2"
@@ -294,8 +518,8 @@ const HomePage = () => {
               <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Postagens Registradas</span>
             </div>
             <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
-              <span className="text-2xl font-black text-blue-600 block">{pages.length}</span>
-              <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Páginas Institucionais</span>
+              <span className="text-2xl font-black text-blue-600 block">{profiles.length}</span>
+              <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Perfis Cadastrados</span>
             </div>
             <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
               <span className="text-2xl font-black text-yellow-600 block">100%</span>
@@ -306,53 +530,96 @@ const HomePage = () => {
       </section>
 
       {/* Conteúdo Principal */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-12 bg-white">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-12 bg-white w-full">
         
-        {/* Seção 1: Páginas Institucionais */}
+        {/* Seção 1: Carrossel de Perfis da Plataforma */}
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div className="flex items-center gap-2">
-              <Building2 className="w-6 h-6 text-green-700" />
+              <UserCheck className="w-6 h-6 text-green-700" />
               <div>
-                <h3 className="text-xl font-bold text-slate-800">Páginas Institucionais</h3>
-                <p className="text-xs text-slate-500">Órgãos, Secretarias e Subprefeituras ativas no sistema</p>
+                <h3 className="text-xl font-bold text-slate-800">Perfis da Plataforma</h3>
+                <p className="text-xs text-slate-500">Usuários, Páginas Institucionais, Contas Master e Subcontas cadastradas</p>
               </div>
             </div>
-            <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200">
-              {pages.length} Cadastradas
-            </span>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200 mr-2">
+                {profiles.length} Perfis
+              </span>
+              <button 
+                onClick={() => scrollCarousel('left')}
+                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors text-slate-600 cursor-pointer"
+                aria-label="Anterior"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => scrollCarousel('right')}
+                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors text-slate-600 cursor-pointer"
+                aria-label="Próximo"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          {loadingPages ? (
+          {loadingProfiles ? (
             <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 flex items-center justify-center gap-2 shadow-sm">
               <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-              <span className="text-sm text-slate-500 font-medium">Carregando páginas institucionais...</span>
+              <span className="text-sm text-slate-500 font-medium">Carregando perfis da plataforma...</span>
             </div>
-          ) : pages.length === 0 ? (
+          ) : profiles.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 text-slate-400 text-sm font-medium shadow-sm">
-              Nenhuma página institucional disponível no momento.
+              Nenhum perfil cadastrado no momento.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {pages.map((page) => {
-                const title = page.tittle || page.title || 'Órgão Institucional';
+            /* Carrossel Horizontal */
+            <div 
+              ref={carouselRef}
+              className="flex items-center gap-4 overflow-x-auto scrollbar-none scroll-smooth py-2 px-1 snap-x snap-mandatory"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {profiles.map((profile, idx) => {
+                const name = profile.name || 'Perfil sem nome';
                 return (
-                  <div key={page._id || page.id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md hover:border-green-600/40 transition-all flex items-center gap-3 group">
-                    {page.imageProfile ? (
-                      <img src={page.imageProfile} alt={title} className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm uppercase flex-shrink-0">
-                        {title.slice(0, 2)}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-bold text-slate-800 truncate group-hover:text-green-700 transition-colors">{title}</h4>
-                      {page.managedArea && (
-                        <p className="text-[11px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-slate-400" /> {page.managedArea}
-                        </p>
+                  <div 
+                    key={profile.id || idx} 
+                    className="min-w-[280px] max-w-[300px] bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md hover:border-green-600/40 transition-all flex flex-col justify-between flex-shrink-0 snap-start group space-y-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      {profile.imageProfile ? (
+                        <img 
+                          src={profile.imageProfile} 
+                          alt={name} 
+                          className="w-14 h-14 rounded-full object-cover border border-slate-200 flex-shrink-0" 
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-base uppercase flex-shrink-0">
+                          {name.slice(0, 2)}
+                        </div>
                       )}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <h4 className="text-sm font-bold text-slate-800 truncate group-hover:text-green-700 transition-colors">
+                          {name}
+                        </h4>
+                        {renderProfileBadge(profile.type)}
+                        {profile.managedArea && (
+                          <p className="text-[11px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                            <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" /> {profile.managedArea}
+                          </p>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Botão Ver Perfil */}
+                    <button
+                      onClick={() => handleOpenViewProfile(profile)}
+                      className="w-full py-2 px-3 bg-slate-100 hover:bg-green-600 hover:text-white text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Ver perfil</span>
+                    </button>
                   </div>
                 );
               })}
@@ -449,7 +716,247 @@ const HomePage = () => {
         </section>
       </main>
 
-      {/* Modal de Detalhes da Postagem */}
+      {/* Modal 1: Autenticação de Usuário Master para Visualizar Perfil */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden relative">
+            <div className="bg-gradient-to-r from-green-700 via-green-600 to-blue-700 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-6 h-6 text-yellow-300" />
+                <div>
+                  <h3 className="font-bold text-base">Autenticação Requerida</h3>
+                  <p className="text-xs text-green-100">Área restrita a administradores Master</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowLoginModal(false)}
+                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleLoginSubmit} className="p-6 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-xl flex items-start gap-2">
+                <Lock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <span>
+                  Para visualizar o perfil completo de <strong>{targetProfile?.name}</strong>, informe as credenciais de uma <strong>Conta Master</strong>.
+                </span>
+              </div>
+
+              {loginError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl font-medium flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 text-red-600" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">E-mail Master</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="seu.email@master.com"
+                    required
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Senha</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLoginModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loggingIn}
+                  className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {loggingIn ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Validando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Acessar Perfil</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Visualização de Perfil Detalhado e Postagens do Usuário */}
+      {viewingProfileData && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-100 overflow-hidden relative flex flex-col max-h-[90vh]">
+            
+            {/* Header do Perfil */}
+            <div className="bg-gradient-to-r from-green-700 via-green-600 to-blue-700 text-white p-6 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-4">
+                {viewingProfileData.imageProfile ? (
+                  <img 
+                    src={viewingProfileData.imageProfile} 
+                    alt={viewingProfileData.name} 
+                    className="w-16 h-16 rounded-full object-cover border-2 border-white/80 shadow-md"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/30 flex items-center justify-center text-white font-black text-xl uppercase shadow-md">
+                    {viewingProfileData.name?.slice(0, 2)}
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-xl">{viewingProfileData.name}</h3>
+                    {renderProfileBadge(viewingProfileData.type)}
+                  </div>
+                  <p className="text-xs text-green-100 mt-1 flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-yellow-300" /> Perfil Verificado pela Plataforma
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setViewingProfileData(null)}
+                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Conteúdo do Perfil */}
+            <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-white">
+              {/* Informações de Contato / Dados */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">E-mail</span>
+                  <p className="text-xs font-bold text-slate-700 truncate flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                    <span>{viewingProfileData.email || 'Não informado'}</span>
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Telefone / Identificador</span>
+                  <p className="text-xs font-bold text-slate-700 truncate flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                    <span>{viewingProfileData.tel || 'Não informado'}</span>
+                  </p>
+                </div>
+
+                {viewingProfileData.managedArea && (
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Área de Atuação</span>
+                    <p className="text-xs font-bold text-slate-700 truncate flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                      <span>{viewingProfileData.managedArea}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Seção de Postagens do Usuário */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <h4 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-green-700" />
+                    <span>Postagens Publicadas</span>
+                  </h4>
+                  <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full border border-slate-200">
+                    {userPosts.length} Encontradas
+                  </span>
+                </div>
+
+                {loadingUserPosts ? (
+                  <div className="p-8 text-center border border-slate-200 rounded-xl bg-slate-50 flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                    <span className="text-xs font-medium text-slate-500">Carregando postagens deste usuário...</span>
+                  </div>
+                ) : userPosts.length === 0 ? (
+                  <div className="p-8 text-center border border-slate-200 rounded-xl bg-slate-50 text-slate-400 text-xs font-medium">
+                    Este perfil ainda não realizou nenhuma postagem.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {userPosts.map((post) => (
+                      <div 
+                        key={post._id || post.id}
+                        className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-2"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-mono bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded border border-blue-200">
+                              Protocolo: {post.protocol}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-bold uppercase">{post.city}</span>
+                          </div>
+                          <p className="text-xs text-slate-700 font-medium line-clamp-2">
+                            {post.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] font-bold text-slate-500">
+                          <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px]">
+                            {post.managedArea}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setSelectedPost(post);
+                              setViewingProfileData(null);
+                            }}
+                            className="text-green-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>Detalhes</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer do Modal */}
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setViewingProfileData(null)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: Detalhes da Postagem Selecionada */}
       {selectedPost && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden relative flex flex-col max-h-[90vh]">
