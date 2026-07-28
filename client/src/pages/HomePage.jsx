@@ -147,9 +147,24 @@ const CustomHtmlMarker = ({ map, position }) => {
 const HomePage = () => {
   const navigate = useNavigate();
   const carouselRef = useRef(null);
+  const videoRef = useRef(null);
 
   // Estado para controlar a exibição do vídeo de introdução
   const [showIntro, setShowIntro] = useState(true);
+
+  // Tentativa de reprodução automática com áudio
+  useEffect(() => {
+    if (showIntro && videoRef.current) {
+      videoRef.current.muted = false;
+      const playPromise = videoRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.warn("Autoplay com áudio foi bloqueado pelo navegador. Tentando reproduzir com som no clique.", error);
+        });
+      }
+    }
+  }, [showIntro]);
 
   // Estados para dados públicos
   const [posts, setPosts] = useState([]);
@@ -432,14 +447,14 @@ const HomePage = () => {
   return (
     <div className="min-h-screen bg-white antialiased font-sans flex flex-col relative">
       
-      {/* Modal Overlay do Vídeo de Introdução (Fundo Transparente & Sem Corte de Imagem) */}
+      {/* Modal Overlay do Vídeo de Introdução (Fundo Transparente, Sem Corte & Com Som) */}
       {showIntro && (
         <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto">
           <div className="relative max-w-4xl w-full max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center bg-transparent">
             <video
+              ref={videoRef}
               src={introVideo}
               autoPlay
-              muted
               playsInline
               onEnded={() => setShowIntro(false)}
               className="w-full h-full max-h-[85vh] object-contain bg-transparent rounded-3xl"
