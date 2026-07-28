@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Building2, 
-  Search, 
   MapPin, 
   FileText, 
   LogIn, 
@@ -25,12 +24,14 @@ import {
   Mail,
   Phone,
   Lock,
-  ExternalLink
+  ExternalLink,
+  SkipForward
 } from 'lucide-react';
 import { Map, useMap } from '@vis.gl/react-google-maps';
 
-// Importação da imagem da logo
+// Importação da logo e do vídeo de abertura
 import logoImg from '../LOGO---CIDADEMDIA (1).png';
+import introVideo from './IMG_6655.MOV';
 
 // Base URL da API
 const API_BASE_URL = 'https://cidadeemdia.onrender.com';
@@ -147,19 +148,22 @@ const HomePage = () => {
   const navigate = useNavigate();
   const carouselRef = useRef(null);
 
+  // Estado para controlar a exibição do vídeo de introdução
+  const [showIntro, setShowIntro] = useState(true);
+
   // Estados para dados públicos
   const [posts, setPosts] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
 
-  // Estados de busca
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeSearch, setActiveSearch] = useState('');
+  // Estado da postagem que o usuário deseja visualizar
+  const [targetPost, setTargetPost] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
 
-  // Estados do fluxo de visualização de perfil (Login + Modal do Perfil)
+  // Estados do fluxo de visualização (Perfil ou Postagem)
   const [targetProfile, setTargetProfile] = useState(null);
+  const [actionType, setActionType] = useState(null); // 'profile' ou 'post'
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -295,14 +299,22 @@ const HomePage = () => {
     }
   };
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    setActiveSearch(searchTerm);
+  // Ao clicar para ver perfil
+  const handleOpenViewProfile = (profile) => {
+    setActionType('profile');
+    setTargetProfile(profile);
+    setTargetPost(null);
+    setLoginEmail('');
+    setLoginPassword('');
+    setLoginError('');
+    setShowLoginModal(true);
   };
 
-  // Ao clicar no botão "Ver perfil", abre o modal de validação de login Master
-  const handleOpenViewProfile = (profile) => {
-    setTargetProfile(profile);
+  // Ao clicar para ver detalhes da postagem
+  const handleOpenPostDetails = (post) => {
+    setActionType('post');
+    setTargetPost(post);
+    setTargetProfile(null);
     setLoginEmail('');
     setLoginPassword('');
     setLoginError('');
@@ -341,13 +353,18 @@ const HomePage = () => {
 
       // Validação estrita de permissão Master
       if (data.role !== 'master') {
-        setLoginError('Acesso negado: Apenas contas Master têm permissão para visualizar perfis.');
+        setLoginError('Acesso negado: Apenas contas Master têm permissão para visualizar estas informações.');
         return;
       }
 
-      // Sucesso no login master: fecha modal de login e abre detalhes do perfil
+      // Sucesso no login master
       setShowLoginModal(false);
-      openProfileDetails(targetProfile);
+
+      if (actionType === 'profile' && targetProfile) {
+        openProfileDetails(targetProfile);
+      } else if (actionType === 'post' && targetPost) {
+        setSelectedPost(targetPost);
+      }
 
     } catch (error) {
       console.error('Erro ao realizar login:', error);
@@ -377,19 +394,6 @@ const HomePage = () => {
       }
     }
   };
-
-  // Filtragem de Postagens com base na pesquisa confirmada
-  const filteredPosts = posts.filter(post => {
-    const term = activeSearch.toLowerCase().trim();
-    if (!term) return true;
-
-    return (
-      (post.protocol && post.protocol.toLowerCase().includes(term)) ||
-      (post.description && post.description.toLowerCase().includes(term)) ||
-      (post.city && post.city.toLowerCase().includes(term)) ||
-      (post.managedArea && post.managedArea.toLowerCase().includes(term))
-    );
-  });
 
   const parsedCoordinates = selectedPost ? getCoords(selectedPost) : null;
   const temCep = selectedPost?.CEP || selectedPost?.cep;
@@ -426,7 +430,31 @@ const HomePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white antialiased font-sans flex flex-col">
+    <div className="min-h-screen bg-white antialiased font-sans flex flex-col relative">
+      
+      {/* Modal Overlay do Vídeo de Introdução (Fundo Transparente & Sem Corte de Imagem) */}
+      {showIntro && (
+        <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto">
+          <div className="relative max-w-4xl w-full max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center bg-transparent">
+            <video
+              src={introVideo}
+              autoPlay
+              muted
+              playsInline
+              onEnded={() => setShowIntro(false)}
+              className="w-full h-full max-h-[85vh] object-contain bg-transparent rounded-3xl"
+            />
+            <button
+              onClick={() => setShowIntro(false)}
+              className="absolute bottom-6 right-6 z-10 bg-slate-900/80 hover:bg-black text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-2xl border border-white/20 transition-all flex items-center gap-2 shadow-xl cursor-pointer"
+            >
+              <span>Pular</span>
+              <SkipForward className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header / Navbar */}
       <header className="bg-gradient-to-r from-green-700 via-green-600 to-blue-700 text-white shadow-md relative z-40 sticky top-0">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-yellow-400"></div>
@@ -470,10 +498,9 @@ const HomePage = () => {
         </div>
       </header>
 
-      {/* Hero Banner / Seção de Busca */}
-      <section className="bg-white text-slate-800 py-16 px-4 border-b border-slate-100 relative overflow-hidden">
-        <div className="max-w-4xl mx-auto text-center space-y-6 relative z-10">
-          
+      {/* Hero Banner Limpo */}
+      <section className="bg-white text-slate-800 py-12 px-4 border-b border-slate-100 relative overflow-hidden">
+        <div className="max-w-4xl mx-auto text-center space-y-4 relative z-10">
           <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 shadow-sm">
             <Award className="w-3.5 h-3.5 text-green-600" /> Portal Oficial de Acompanhamento Público
           </span>
@@ -481,51 +508,6 @@ const HomePage = () => {
           <h2 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight text-slate-900">
             Acompanhe e notifique o seu município em <span className="text-green-600 underline decoration-green-500/30">tempo real</span>.
           </h2>
-
-          <p className="text-sm sm:text-base text-slate-600 font-normal max-w-2xl mx-auto leading-relaxed">
-            Consulte protocolos, verifique demandas atendidas e navegue pelas secretarias e órgãos institucionais parceiros.
-          </p>
-
-          {/* Form / Barra de Pesquisa */}
-          <form 
-            onSubmit={handleSearchSubmit} 
-            className="max-w-2xl mx-auto bg-white p-2 rounded-2xl border border-slate-200 shadow-xl flex flex-col sm:flex-row gap-2"
-          >
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input 
-                type="text" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Busque por protocolo, descrição, área ou cidade..." 
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 text-slate-800 rounded-xl text-sm font-medium placeholder-slate-400 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition-all"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="px-6 py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-900 font-extrabold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 flex-shrink-0 cursor-pointer"
-            >
-              <Search className="w-4 h-4" />
-              <span>Buscar</span>
-            </button>
-          </form>
-
-          {/* Cards de Métricas */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-6 max-w-3xl mx-auto">
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
-              <span className="text-2xl font-black text-green-700 block">{posts.length}</span>
-              <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Postagens Registradas</span>
-            </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center">
-              <span className="text-2xl font-black text-blue-600 block">{profiles.length}</span>
-              <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Perfis Cadastrados</span>
-            </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
-              <span className="text-2xl font-black text-yellow-600 block">100%</span>
-              <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Transparência Pública</span>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -639,7 +621,7 @@ const HomePage = () => {
             </div>
 
             <div className="text-xs font-semibold text-slate-500">
-              Exibindo <span className="font-bold text-slate-800">{filteredPosts.length}</span> de <span className="font-bold text-slate-800">{posts.length}</span>
+              Total de <span className="font-bold text-slate-800">{posts.length}</span> postagens
             </div>
           </div>
 
@@ -648,65 +630,44 @@ const HomePage = () => {
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               <p className="text-sm text-slate-500 font-medium">Buscando postagens públicas...</p>
             </div>
-          ) : filteredPosts.length === 0 ? (
+          ) : posts.length === 0 ? (
             <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm space-y-2">
               <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto" />
               <p className="text-slate-700 font-bold text-base">Nenhuma postagem encontrada.</p>
-              <p className="text-xs text-slate-400">Tente ajustar o termo de pesquisa digitado.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredPosts.map((post) => (
+              {posts.map((post) => (
                 <div 
                   key={post._id || post.id}
-                  onClick={() => setSelectedPost(post)}
-                  className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between group cursor-pointer"
+                  onClick={() => handleOpenPostDetails(post)}
+                  className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between group cursor-pointer space-y-3"
                 >
                   <div className="space-y-3">
-                    {/* Header do Card */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-md border border-blue-100 uppercase tracking-wide">
-                        Protocolo: {post.protocol || 'S/N'}
-                      </span>
-                      {post.createdAt && (
-                        <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" /> {new Date(post.createdAt).toLocaleDateString('pt-BR')}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Prévia da Imagem */}
+                    {/* Imagens da Postagem */}
                     {post.photos && (Array.isArray(post.photos) ? post.photos.length > 0 : typeof post.photos === 'string') && (
-                      <div className="w-full h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
+                      <div className="w-full h-48 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
                         <img 
                           src={Array.isArray(post.photos) ? post.photos[0] : post.photos} 
-                          alt="Evidência Visual" 
+                          alt="Imagem da Postagem" 
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                         />
                       </div>
                     )}
 
-                    {/* Descrição */}
-                    <p className="text-sm text-slate-700 font-medium line-clamp-3 leading-relaxed">
+                    {/* Descrição da Postagem */}
+                    <p className="text-sm text-slate-700 font-medium leading-relaxed">
                       {post.description || 'Sem descrição cadastrada.'}
                     </p>
-
-                    {/* Badge da Área */}
-                    {post.managedArea && (
-                      <div className="text-[10px] bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 inline-block font-bold text-slate-600 uppercase">
-                        Setor: {post.managedArea}
-                      </div>
-                    )}
                   </div>
 
-                  {/* Footer do Card */}
-                  <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500 group-hover:text-green-700 transition-colors">
-                    <span className="flex items-center gap-1 text-slate-500 truncate max-w-[180px]">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" /> 
-                      <span className="truncate">{post.city || post.City || 'Não informada'}</span>
+                  {/* Botão Indicativo para Ver Detalhes */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-green-700 group-hover:text-green-800 transition-colors">
+                    <span className="flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-amber-500" /> Acesso Restrito Master
                     </span>
-                    <span className="text-[11px] font-bold text-green-700 flex items-center gap-0.5">
-                      Ver mapa <ArrowRight className="w-3 h-3" />
+                    <span className="flex items-center gap-0.5">
+                      Ver detalhes <ArrowRight className="w-3 h-3" />
                     </span>
                   </div>
                 </div>
@@ -716,7 +677,7 @@ const HomePage = () => {
         </section>
       </main>
 
-      {/* Modal 1: Autenticação de Usuário Master para Visualizar Perfil */}
+      {/* Modal 1: Autenticação de Usuário Master */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden relative">
@@ -740,7 +701,7 @@ const HomePage = () => {
               <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-xl flex items-start gap-2">
                 <Lock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <span>
-                  Para visualizar o perfil completo de <strong>{targetProfile?.name}</strong>, informe as credenciais de uma <strong>Conta Master</strong>.
+                  Para {actionType === 'profile' ? `visualizar o perfil de ${targetProfile?.name}` : 'ver os detalhes completos desta postagem'}, informe as credenciais de uma <strong>Conta Master</strong>.
                 </span>
               </div>
 
@@ -802,7 +763,7 @@ const HomePage = () => {
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Acessar Perfil</span>
+                      <span>Acessar Informações</span>
                     </>
                   )}
                 </button>
@@ -852,7 +813,6 @@ const HomePage = () => {
 
             {/* Conteúdo do Perfil */}
             <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-white">
-              {/* Informações de Contato / Dados */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">E-mail</span>
@@ -964,7 +924,7 @@ const HomePage = () => {
             <div className="bg-gradient-to-r from-green-700 via-green-600 to-blue-700 text-white p-5 flex items-center justify-between flex-shrink-0 border-b border-green-800">
               <div>
                 <span className="text-[10px] font-bold bg-yellow-400/20 text-yellow-300 px-2 py-0.5 rounded-full uppercase tracking-wider block w-max mb-1 border border-yellow-400/30">
-                  Postagem Pública
+                  Detalhes Acessados via Master
                 </span>
                 <h3 className="font-bold text-lg flex items-center gap-1.5">
                   <FileText className="w-5 h-5 text-yellow-400" /> Protocolo: {selectedPost.protocol || 'Sem Código'}
