@@ -82,4 +82,93 @@ routes.get('/returnAllUsers', async (req, res) => {
     }
 });
 
+const MidiaHome = require('../models/MidiaHome');
+
+routes.post('/midia-home', async (req, res) => {
+    const { url, isImage } = req.body
+    
+    const newMidia = new MidiaHome({ url, isImage });
+
+    try {
+        const savedMidia = await newMidia.save();
+        res.status(201).json(savedMidia);
+    } catch (error) {
+        res.status(500).json({ message: 'Error saving media', error });
+    }
+
+})
+
+routes.get('/midia-home', async (req, res) => {
+    try {
+        const midias = await MidiaHome.find();
+        res.status(200).json(midias);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching media', error });
+    }
+});
+
+routes.delete('/midia-home/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const deletedMidia = await MidiaHome.findByIdAndDelete(id);
+
+        if (!deletedMidia) {
+            return res.status(404).json({ message: 'Media not found' });
+        }
+
+        res.status(200).json({ message: 'Media deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting media', error });
+    }
+});
+
+const Plans = require('../models/Plans');
+
+routes.post('/plans', async (req, res) => {
+    const { name, price, benefits } = req.body;
+
+    const newPlan = new Plans({ name, price, benefits });
+
+    try {
+        const savedPlan = await newPlan.save();
+        res.status(201).json(savedPlan);
+    } catch (error) {
+        res.status(500).json({ message: 'Error saving plan', error });
+    }
+});
+
+routes.get('/plans', async (req, res) => {
+    try {
+        const plans = await Plans.find();
+        res.status(200).json(plans);
+    }
+
+    catch (error) {
+        res.status(500).json({ message: 'Error fetching plans', error });
+    }
+
+});
+
+routes.delete('/plans/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const deletedPlan = await Plans.findByIdAndDelete(id);
+
+        if (!deletedPlan) {
+            return res.status(404).json({ message: 'Plan not found' });
+        }
+
+        res.status(200).json({ message: 'Plan deleted successfully' });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error deleting plan', error });
+    }
+
+});
+
+
+
+
 module.exports = routes;
