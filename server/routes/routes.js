@@ -128,13 +128,22 @@ const Plans = require('../models/Plans');
 routes.post('/plans', async (req, res) => {
     const { name, price, benefits } = req.body;
 
-    const newPlan = new Plans({ name, price, benefits });
+    // 1. Trata e converte o preço para número (substitui vírgula por ponto, se houver)
+    const numericPrice = Number(String(price).replace(',', '.'));
+
+    // 2. Mapeia 'name' vindo do req.body para o campo 'title' do Schema
+    const newPlan = new Plans({ 
+        title: name, 
+        price: numericPrice, 
+        benefits 
+    });
 
     try {
         const savedPlan = await newPlan.save();
         res.status(201).json(savedPlan);
     } catch (error) {
-        res.status(500).json({ message: 'Error saving plan', error });
+        // Retorna status 400 se for erro de validação do Mongoose
+        res.status(400).json({ message: 'Erro ao validar ou salvar plano', error: error.message });
     }
 });
 
