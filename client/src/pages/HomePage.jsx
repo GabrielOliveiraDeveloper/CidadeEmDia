@@ -26,7 +26,10 @@ import {
   Lock,
   ExternalLink,
   SkipForward,
-  Play
+  Play,
+  CreditCard,
+  Check,
+  Sparkles
 } from 'lucide-react';
 import { Map, useMap } from '@vis.gl/react-google-maps';
 
@@ -171,8 +174,12 @@ const HomePage = () => {
   // Estados para dados públicos
   const [posts, setPosts] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [midias, setMidias] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
+  const [loadingMidias, setLoadingMidias] = useState(true);
+  const [loadingPlans, setLoadingPlans] = useState(true);
 
   // Estado da postagem que o usuário deseja visualizar
   const [targetPost, setTargetPost] = useState(null);
@@ -191,6 +198,38 @@ const HomePage = () => {
   const [viewingProfileData, setViewingProfileData] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
   const [loadingUserPosts, setLoadingUserPosts] = useState(false);
+
+  // Busca dos planos
+  const fetchPlans = async () => {
+    try {
+      setLoadingPlans(true);
+      const response = await fetch(`${API_BASE_URL}/plans`);
+      if (response.ok) {
+        const data = await response.json();
+        setPlans(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar planos:', error);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  // Busca das mídias da home
+  const fetchMidias = async () => {
+    try {
+      setLoadingMidias(true);
+      const response = await fetch(`${API_BASE_URL}/midia-home`);
+      if (response.ok) {
+        const data = await response.json();
+        setMidias(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar mídias da home:', error);
+    } finally {
+      setLoadingMidias(false);
+    }
+  };
 
   // Busca de postagens públicas
   const fetchPosts = async () => {
@@ -302,6 +341,8 @@ const HomePage = () => {
   useEffect(() => {
     fetchPosts();
     fetchAllProfiles();
+    fetchMidias();
+    fetchPlans();
   }, []);
 
   const scrollCarousel = (direction) => {
@@ -514,7 +555,7 @@ const HomePage = () => {
 
       {/* Hero Banner */}
       <section className="bg-white text-slate-800 py-12 px-4 border-b border-slate-100 relative overflow-hidden">
-        <div className="max-w-4xl mx-auto text-center space-y-4 relative z-10">
+        <div className="max-w-5xl mx-auto text-center space-y-6 relative z-10">
           <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 shadow-sm">
             <Award className="w-3.5 h-3.5 text-green-600" /> Portal Oficial de Acompanhamento Público
           </span>
@@ -522,11 +563,45 @@ const HomePage = () => {
           <h2 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight text-slate-900">
             Acompanhe e notifique o seu município em <span className="text-green-600 underline decoration-green-500/30">tempo real</span>.
           </h2>
+
+          {/* Seção Exibição de Mídias Home (MidiaHome) */}
+          {loadingMidias ? (
+            <div className="flex items-center justify-center gap-2 py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+              <span className="text-xs text-slate-500 font-medium">Carregando mídias...</span>
+            </div>
+          ) : midias.length > 0 && (
+            <div className="pt-4">
+              <div className="flex items-center justify-center gap-4 overflow-x-auto py-2 px-1 max-w-full">
+                {midias.map((midia, index) => (
+                  <div 
+                    key={midia._id || index}
+                    className="flex-shrink-0 w-64 h-40 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-black flex items-center justify-center group"
+                  >
+                    {midia.isImage ? (
+                      <img 
+                        src={midia.url} 
+                        alt={`Mídia ${index + 1}`} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      />
+                    ) : (
+                      <video 
+                        src={midia.url} 
+                        controls 
+                        className="w-full h-full object-cover" 
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
       {/* Conteúdo Principal */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-12 bg-white w-full">
+        {/* Seção de Perfis */}
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div className="flex items-center gap-2">
@@ -677,6 +752,79 @@ const HomePage = () => {
                       Ver detalhes <ArrowRight className="w-3 h-3" />
                     </span>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Seção de Planos e Assinaturas */}
+        <section className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-6 h-6 text-green-700" />
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Planos e Assinaturas</h3>
+                <p className="text-xs text-slate-500">Escolha o plano ideal para a gestão do seu município</p>
+              </div>
+            </div>
+
+            <div className="text-xs font-semibold text-slate-500">
+              Total de <span className="font-bold text-slate-800">{plans.length}</span> planos
+            </div>
+          </div>
+
+          {loadingPlans ? (
+            <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <p className="text-sm text-slate-500 font-medium">Carregando planos disponíveis...</p>
+            </div>
+          ) : plans.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 text-slate-400 text-sm font-medium shadow-sm">
+              Nenhum plano disponível no momento.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {plans.map((plan) => (
+                <div 
+                  key={plan._id || plan.id}
+                  className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-lg hover:border-green-500 transition-all flex flex-col justify-between space-y-6 relative group"
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-lg font-bold text-slate-800 group-hover:text-green-700 transition-colors">
+                        {plan.title}
+                      </h4>
+                      <Sparkles className="w-5 h-5 text-yellow-500" />
+                    </div>
+
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-black text-slate-900">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plan.price)}
+                      </span>
+                      <span className="text-xs text-slate-500 font-semibold">/mês</span>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-4 space-y-2.5">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                        Benefícios incluídos:
+                      </span>
+                      {Array.isArray(plan.benefits) && plan.benefits.map((benefit, idx) => (
+                        <div key={idx} className="flex items-start gap-2 text-xs text-slate-600 font-medium">
+                          <Check className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                          <span>{benefit}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => navigate('/register-master')}
+                    className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Contratar Plano</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
