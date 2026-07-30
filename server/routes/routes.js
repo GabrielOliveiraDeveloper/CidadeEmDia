@@ -3,6 +3,27 @@ const { registerController, loginController, registerMaster } = require('../cont
 const { createSubs, getAllSubs, getSubsById, updateSubs } = require('../controllers/subsControllers');
 const notificationController = require('../controllers/Notifications');
 const pageController = require('../controllers/PageControllers');
+const Post = require('../models/Post');
+
+
+routes.post('/updateposttobunner/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const post = await Post.findById(id);
+
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
+
+        post.isBanner = true;
+        await post.save();
+
+        res.status(200).json({ message: 'Post updated to banner successfully', post });
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating post to banner', error });
+    }
+});
 
 routes.post('/pages', pageController.createPages);
 routes.get('/pages', pageController.getAllPages);

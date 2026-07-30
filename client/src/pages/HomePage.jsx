@@ -14,8 +14,6 @@ import {
   ArrowRight,
   Compass,
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   UserCheck,
   Shield,
   User,
@@ -29,7 +27,8 @@ import {
   Play,
   CreditCard,
   Check,
-  Sparkles
+  Sparkles,
+  Video
 } from 'lucide-react';
 import { Map, useMap } from '@vis.gl/react-google-maps';
 
@@ -150,7 +149,6 @@ const CustomHtmlMarker = ({ map, position }) => {
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const carouselRef = useRef(null);
   const videoRef = useRef(null);
 
   // Estado para controlar a exibição do vídeo e estado do player
@@ -173,11 +171,9 @@ const HomePage = () => {
 
   // Estados para dados públicos
   const [posts, setPosts] = useState([]);
-  const [profiles, setProfiles] = useState([]);
   const [midias, setMidias] = useState([]);
   const [plans, setPlans] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
-  const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [loadingMidias, setLoadingMidias] = useState(true);
   const [loadingPlans, setLoadingPlans] = useState(true);
 
@@ -185,7 +181,7 @@ const HomePage = () => {
   const [targetPost, setTargetPost] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
 
-  // Estados do fluxo de visualização (Perfil ou Postagem)
+  // Estados do fluxo de visualização
   const [targetProfile, setTargetProfile] = useState(null);
   const [actionType, setActionType] = useState(null); // 'profile' ou 'post'
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -247,122 +243,14 @@ const HomePage = () => {
     }
   };
 
-  // Busca e unificação de todos os perfis
-  const fetchAllProfiles = async () => {
-    try {
-      setLoadingProfiles(true);
-
-      const [pagesRes, subsRes, mastersRes, usersRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/pages`),
-        fetch(`${API_BASE_URL}/subs`),
-        fetch(`${API_BASE_URL}/returnAllMasters`),
-        fetch(`${API_BASE_URL}/returnAllUsers`)
-      ]);
-
-      const fetchedProfiles = [];
-
-      if (pagesRes.status === 'fulfilled' && pagesRes.value.ok) {
-        const pagesData = await pagesRes.value.json();
-        if (Array.isArray(pagesData)) {
-          pagesData.forEach(p => {
-            fetchedProfiles.push({
-              id: p._id || p.id,
-              name: p.tittle || p.title || 'Página Institucional',
-              imageProfile: p.imageProfile,
-              type: 'Página Institucional',
-              managedArea: p.managedArea,
-              city: p.city,
-              email: p.email,
-              tel: p.tel
-            });
-          });
-        }
-      }
-
-      if (subsRes.status === 'fulfilled' && subsRes.value.ok) {
-        const subsData = await subsRes.value.json();
-        if (Array.isArray(subsData)) {
-          subsData.forEach(s => {
-            fetchedProfiles.push({
-              id: s._id || s.id,
-              name: s.tittle || s.title || 'Subconta',
-              imageProfile: s.imageProfile,
-              type: 'Subconta',
-              managedArea: s.managedArea,
-              email: s.email,
-              tel: s.tel
-            });
-          });
-        }
-      }
-
-      if (mastersRes.status === 'fulfilled' && mastersRes.value.ok) {
-        const mastersData = await mastersRes.value.json();
-        if (Array.isArray(mastersData)) {
-          mastersData.forEach(m => {
-            fetchedProfiles.push({
-              id: m._id || m.id,
-              name: m.tittle || 'Conta Master',
-              imageProfile: m.imageProfile,
-              type: 'Conta Master',
-              managedArea: m.managedArea,
-              city: m.city,
-              email: m.email,
-              tel: m.tel || m.CPForCNPJ
-            });
-          });
-        }
-      }
-
-      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
-        const usersData = await usersRes.value.json();
-        if (Array.isArray(usersData)) {
-          usersData.forEach(u => {
-            fetchedProfiles.push({
-              id: u._id || u.id,
-              name: u.name || 'Usuário',
-              imageProfile: u.imageProfile,
-              type: 'Usuário',
-              email: u.email,
-              tel: u.tel
-            });
-          });
-        }
-      }
-
-      setProfiles(fetchedProfiles);
-    } catch (error) {
-      console.error('Erro ao carregar perfis:', error);
-    } finally {
-      setLoadingProfiles(false);
-    }
-  };
-
   useEffect(() => {
     fetchPosts();
-    fetchAllProfiles();
     fetchMidias();
     fetchPlans();
   }, []);
 
-  const scrollCarousel = (direction) => {
-    if (carouselRef.current) {
-      const scrollAmount = direction === 'left' ? -300 : 300;
-      carouselRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    }
-  };
-
-  const handleOpenViewProfile = (profile) => {
-    setActionType('profile');
-    setTargetProfile(profile);
-    setTargetPost(null);
-    setLoginEmail('');
-    setLoginPassword('');
-    setLoginError('');
-    setShowLoginModal(true);
-  };
-
   const handleOpenPostDetails = (post) => {
+    if (post.isMidiaHome) return; // Mídias institucionais não possuem modal de restrição Master
     setActionType('post');
     setTargetPost(post);
     setTargetProfile(null);
@@ -470,6 +358,19 @@ const HomePage = () => {
     }
   };
 
+  // Mídias da seção superior para exibição na seção de postagens
+  const formattedMidias = midias.map((midia, index) => ({
+    _id: midia._id || `midia-${index}`,
+    isMidiaHome: true,
+    isImage: midia.isImage,
+    url: midia.url,
+    title: midia.title || `Mídia em Destaque #${index + 1}`,
+    description: midia.description || 'Vídeo/Mídia institucional em destaque na plataforma.'
+  }));
+
+  // Lista unificada para a seção "Postagens Registradas"
+  const allRegistredPosts = [...formattedMidias, ...posts];
+
   return (
     <div className="min-h-screen bg-white antialiased font-sans flex flex-col relative">
       
@@ -564,7 +465,7 @@ const HomePage = () => {
             Acompanhe e notifique o seu município em <span className="text-green-600 underline decoration-green-500/30">tempo real</span>.
           </h2>
 
-          {/* Seção Exibição de Mídias Home (MidiaHome) */}
+          {/* Seção Exibição de Mídias Home Organizadas Horizontalmente */}
           {loadingMidias ? (
             <div className="flex items-center justify-center gap-2 py-4">
               <Loader2 className="w-5 h-5 animate-spin text-green-600" />
@@ -572,11 +473,11 @@ const HomePage = () => {
             </div>
           ) : midias.length > 0 && (
             <div className="pt-4">
-              <div className="flex items-center justify-center gap-4 overflow-x-auto py-2 px-1 max-w-full">
+              <div className="flex items-center justify-start sm:justify-center gap-4 overflow-x-auto py-2 px-1 max-w-full scrollbar-thin">
                 {midias.map((midia, index) => (
                   <div 
                     key={midia._id || index}
-                    className="flex-shrink-0 w-64 h-40 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-black flex items-center justify-center group"
+                    className="flex-shrink-0 w-64 sm:w-72 h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-black flex items-center justify-center group relative"
                   >
                     {midia.isImage ? (
                       <img 
@@ -601,159 +502,119 @@ const HomePage = () => {
 
       {/* Conteúdo Principal */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 space-y-12 bg-white w-full">
-        {/* Seção de Perfis */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div className="flex items-center gap-2">
-              <UserCheck className="w-6 h-6 text-green-700" />
-              <div>
-                <h3 className="text-xl font-bold text-slate-800">Perfis da Plataforma</h3>
-                <p className="text-xs text-slate-500">Usuários, Páginas Institucionais, Contas Master e Subcontas cadastradas</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200 mr-2">
-                {profiles.length} Perfis
-              </span>
-              <button 
-                onClick={() => scrollCarousel('left')}
-                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors text-slate-600 cursor-pointer"
-                aria-label="Anterior"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={() => scrollCarousel('right')}
-                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors text-slate-600 cursor-pointer"
-                aria-label="Próximo"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {loadingProfiles ? (
-            <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 flex items-center justify-center gap-2 shadow-sm">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-              <span className="text-sm text-slate-500 font-medium">Carregando perfis da plataforma...</span>
-            </div>
-          ) : profiles.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 text-slate-400 text-sm font-medium shadow-sm">
-              Nenhum perfil cadastrado no momento.
-            </div>
-          ) : (
-            <div 
-              ref={carouselRef}
-              className="flex items-center gap-4 overflow-x-auto scrollbar-none scroll-smooth py-2 px-1 snap-x snap-mandatory"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {profiles.map((profile, idx) => {
-                const name = profile.name || 'Perfil sem nome';
-                return (
-                  <div 
-                    key={profile.id || idx} 
-                    className="min-w-[280px] max-w-[300px] bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md hover:border-green-600/40 transition-all flex flex-col justify-between flex-shrink-0 snap-start group space-y-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      {profile.imageProfile ? (
-                        <img 
-                          src={profile.imageProfile} 
-                          alt={name} 
-                          className="w-14 h-14 rounded-full object-cover border border-slate-200 flex-shrink-0" 
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-base uppercase flex-shrink-0">
-                          {name.slice(0, 2)}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <h4 className="text-sm font-bold text-slate-800 truncate group-hover:text-green-700 transition-colors">
-                          {name}
-                        </h4>
-                        {renderProfileBadge(profile.type)}
-                        {profile.managedArea && (
-                          <p className="text-[11px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
-                            <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" /> {profile.managedArea}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleOpenViewProfile(profile)}
-                      className="w-full py-2 px-3 bg-slate-100 hover:bg-green-600 hover:text-white text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Ver perfil</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Feed de Postagens */}
+        
+        {/* Feed de Postagens Registradas - Organizado Verticalmente */}
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div className="flex items-center gap-2">
               <FileText className="w-6 h-6 text-green-700" />
               <div>
                 <h3 className="text-xl font-bold text-slate-800">Postagens Registradas</h3>
-                <p className="text-xs text-slate-500">Acompanhe as solicitações recentes enviadas pela comunidade</p>
+                <p className="text-xs text-slate-500">Acompanhe os vídeos informativos e as solicitações recentes enviadas pela comunidade</p>
               </div>
-            </div>
-
-            <div className="text-xs font-semibold text-slate-500">
-              Total de <span className="font-bold text-slate-800">{posts.length}</span> postagens
             </div>
           </div>
 
-          {loadingPosts ? (
+          {(loadingPosts || loadingMidias) ? (
             <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              <p className="text-sm text-slate-500 font-medium">Buscando postagens públicas...</p>
+              <p className="text-sm text-slate-500 font-medium">Buscando postagens e mídias...</p>
             </div>
-          ) : posts.length === 0 ? (
+          ) : allRegistredPosts.length === 0 ? (
             <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 shadow-sm space-y-2">
               <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto" />
-              <p className="text-slate-700 font-bold text-base">Nenhuma postagem encontrada.</p>
+              <p className="text-slate-700 font-bold text-base">Nenhum registro encontrado.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {posts.map((post) => (
-                <div 
-                  key={post._id || post.id}
-                  onClick={() => handleOpenPostDetails(post)}
-                  className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between group cursor-pointer space-y-3"
-                >
-                  <div className="space-y-3">
-                    {post.photos && (Array.isArray(post.photos) ? post.photos.length > 0 : typeof post.photos === 'string') && (
-                      <div className="w-full h-48 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
-                        <img 
-                          src={Array.isArray(post.photos) ? post.photos[0] : post.photos} 
-                          alt="Imagem da Postagem" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                        />
+            /* Alinhamento Vertical das Postagens e Vídeos */
+            <div className="flex flex-col space-y-4">
+              {allRegistredPosts.map((item) => {
+                // Item do tipo Vídeo / Mídia Institucional
+                if (item.isMidiaHome) {
+                  return (
+                    <div 
+                      key={item._id}
+                      className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-5 items-center justify-between group"
+                    >
+                      <div className="w-full sm:w-80 h-48 rounded-xl overflow-hidden bg-black flex-shrink-0 flex items-center justify-center">
+                        {item.isImage ? (
+                          <img 
+                            src={item.url} 
+                            alt={item.title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          />
+                        ) : (
+                          <video 
+                            src={item.url} 
+                            controls 
+                            className="w-full h-full object-cover" 
+                          />
+                        )}
                       </div>
-                    )}
 
-                    <p className="text-sm text-slate-700 font-medium leading-relaxed">
-                      {post.description || 'Sem descrição cadastrada.'}
-                    </p>
-                  </div>
+                      <div className="flex-1 space-y-2 text-left w-full">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
+                            <Video className="w-3 h-3 text-blue-600" /> Vídeo / Mídia Institucional
+                          </span>
+                        </div>
+                        <h4 className="text-base font-bold text-slate-800">
+                          {item.title}
+                        </h4>
+                        <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-green-700 group-hover:text-green-800 transition-colors">
-                    <span className="flex items-center gap-1">
-                      <Lock className="w-3.5 h-3.5 text-amber-500" /> Acesso Restrito Master
-                    </span>
-                    <span className="flex items-center gap-0.5">
-                      Ver detalhes <ArrowRight className="w-3 h-3" />
-                    </span>
+                // Item de Postagem de Usuário
+                return (
+                  <div 
+                    key={item._id || item.id}
+                    onClick={() => handleOpenPostDetails(item)}
+                    className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col sm:flex-row gap-5 justify-between items-start sm:items-center group cursor-pointer"
+                  >
+                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-1 w-full">
+                      {item.photos && (Array.isArray(item.photos) ? item.photos.length > 0 : typeof item.photos === 'string') && (
+                        <div className="w-full sm:w-48 h-36 rounded-xl overflow-hidden bg-slate-50 border border-slate-100 flex-shrink-0">
+                          <img 
+                            src={Array.isArray(item.photos) ? item.photos[0] : item.photos} 
+                            alt="Imagem da Postagem" 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold bg-green-100 text-green-800 px-2.5 py-0.5 rounded-full border border-green-200">
+                            Postagem de Cidadão
+                          </span>
+                          {item.city && (
+                            <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-slate-400" /> {item.city}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                          {item.description || 'Sem descrição cadastrada.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 sm:pt-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-slate-100 flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 text-xs font-bold text-green-700 group-hover:text-green-800 transition-colors flex-shrink-0">
+                      <span className="flex items-center gap-1 text-[11px]">
+                        <Lock className="w-3.5 h-3.5 text-amber-500" /> Restrito Master
+                      </span>
+                      <span className="flex items-center gap-0.5">
+                        Ver detalhes <ArrowRight className="w-3 h-3" />
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

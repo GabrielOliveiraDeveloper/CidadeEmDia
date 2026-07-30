@@ -29,6 +29,10 @@ const postSchema = new mongoose.Schema({
     managedArea: {
         type: String,
         required: true
+    },
+    isBanner: {
+        type: Boolean,
+        default: false
     }
 });
 
