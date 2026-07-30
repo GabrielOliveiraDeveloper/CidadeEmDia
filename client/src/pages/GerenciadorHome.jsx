@@ -13,12 +13,11 @@ import {
   Check, 
   X, 
   Film, 
-  FileImage,
   Layers,
-  ArrowLeft
+  FileText,
+  Star
 } from 'lucide-react';
 
-// Base URL da API (mantida conforme padrão do seu projeto)
 const API_BASE_URL = 'https://cidadeemdia.onrender.com';
 
 const GerenciadorHome = () => {
@@ -46,6 +45,13 @@ const GerenciadorHome = () => {
   const [planBenefits, setPlanBenefits] = useState([]);
 
   // ---------------------------------------------------------------------------
+  // ESTADOS - POSTS DA COMUNIDADE
+  // ---------------------------------------------------------------------------
+  const [posts, setPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [updatingBannerId, setUpdatingBannerId] = useState(null);
+
+  // ---------------------------------------------------------------------------
   // ESTADOS DE FEEDBACK (ALERTAS)
   // ---------------------------------------------------------------------------
   const [feedback, setFeedback] = useState({ type: '', message: '' });
@@ -57,9 +63,6 @@ const GerenciadorHome = () => {
     }, 4000);
   };
 
-  // ---------------------------------------------------------------------------
-  // FUNÇÃO AUXILIAR: CONVERSÃO DE ARQUIVO PARA BASE64
-  // ---------------------------------------------------------------------------
   const convertFileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -102,9 +105,25 @@ const GerenciadorHome = () => {
     }
   };
 
+  const fetchPosts = async () => {
+    try {
+      setLoadingPosts(true);
+      const res = await fetch(`${API_BASE_URL}/posts`);
+      if (res.ok) {
+        const data = await res.json();
+        setPosts(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar posts:', error);
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
   useEffect(() => {
     fetchMidias();
     fetchPlans();
+    fetchPosts();
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -114,7 +133,6 @@ const GerenciadorHome = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Identifica se é imagem ou vídeo
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
 
@@ -137,8 +155,6 @@ const GerenciadorHome = () => {
 
     try {
       setUploadingMidia(true);
-
-      // Converte o arquivo selecionado para Base64
       const base64Url = await convertFileToBase64(selectedFile);
 
       const response = await fetch(`${API_BASE_URL}/midia-home`, {
@@ -185,6 +201,36 @@ const GerenciadorHome = () => {
     } catch (error) {
       console.error('Erro ao deletar mídia:', error);
       showFeedback('error', 'Erro de conexão ao remover mídia.');
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // HANDLER DE ATUALIZAR POST PARA BANNER
+  // ---------------------------------------------------------------------------
+  const handleUpdatePostToBanner = async (postId) => {
+    try {
+      setUpdatingBannerId(postId);
+      const response = await fetch(`${API_BASE_URL}/updateposttobunner/${postId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        setPosts((prevPosts) =>
+          prevPosts.map((post) =>
+            (post._id || post.id) === postId ? { ...post, isBanner: true } : post
+          )
+        );
+        showFeedback('success', 'Post destacado como banner com sucesso!');
+      } else {
+        const errData = await response.json();
+        showFeedback('error', errData.message || 'Erro ao atualizar post para banner.');
+      }
+    } catch (error) {
+      console.error('Erro ao promover post:', error);
+      showFeedback('error', 'Erro de conexão ao atualizar post.');
+    } finally {
+      setUpdatingBannerId(null);
     }
   };
 
@@ -269,7 +315,7 @@ const GerenciadorHome = () => {
             <Layers className="w-7 h-7 text-yellow-300" />
             <div>
               <h1 className="text-xl font-black tracking-tight">Painel de Gerenciamento da Home</h1>
-              <p className="text-xs text-green-100">Gerencie as mídias da página principal e os planos de assinatura</p>
+              <p className="text-xs text-green-100">Gerencie as mídias, destaques e planos de assinatura</p>
             </div>
           </div>
         </div>
@@ -307,7 +353,6 @@ const GerenciadorHome = () => {
             </span>
           </div>
 
-          {/* Form de Upload */}
           <form onSubmit={handleUploadMidia} className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-700 block">
@@ -343,7 +388,6 @@ const GerenciadorHome = () => {
               </div>
             </div>
 
-            {/* Preview do arquivo selecionado */}
             {filePreview && (
               <div className="pt-2">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Pré-visualização</span>
@@ -373,7 +417,7 @@ const GerenciadorHome = () => {
                 {uploadingMidia ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Convertendo e Salva...</span>
+                    <span>Convertendo e Salvando...</span>
                   </>
                 ) : (
                   <>
@@ -385,7 +429,6 @@ const GerenciadorHome = () => {
             </div>
           </form>
 
-          {/* Listagem de Mídias */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-700">Mídias Cadastradas</h3>
 
@@ -444,9 +487,119 @@ const GerenciadorHome = () => {
           </div>
         </section>
 
+        {/* =================================================================== */}
+        {/* SEÇÃO 2: POSTAGENS DA COMUNIDADE (BUSCADAS DA ROTA /posts) */}
+        {/* =================================================================== */}
+        <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-2.5">
+              <FileText className="w-6 h-6 text-amber-600" />
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Postagens da Comunidade</h2>
+                <p className="text-xs text-slate-500">Selecione posts para adicionar como Banner Destaque na Home</p>
+              </div>
+            </div>
+            <span className="text-xs font-bold bg-amber-50 text-amber-700 px-3 py-1 rounded-full border border-amber-200">
+              {posts.length} Post(s)
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {loadingPosts ? (
+              <div className="p-8 text-center border border-slate-200 rounded-2xl bg-slate-50 flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-amber-600" />
+                <span className="text-xs text-slate-500 font-medium">Carregando postagens...</span>
+              </div>
+            ) : posts.length === 0 ? (
+              <div className="p-8 text-center border border-slate-200 rounded-2xl bg-slate-50 text-slate-400 text-xs font-medium">
+                Nenhuma postagem encontrada.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {posts.map((post) => {
+                  const postId = post._id || post.id;
+                  const isAlreadyBanner = Boolean(post.isBanner);
+                  const imageSrc = (post.photos && post.photos.length > 0)
+                    ? (Array.isArray(post.photos) ? post.photos[0] : post.photos)
+                    : (post.imageUrl || post.url || post.midiaUrl);
+
+                  return (
+                    <div 
+                      key={postId}
+                      className={`bg-white rounded-2xl border p-5 shadow-sm transition-all flex flex-col justify-between space-y-4 ${
+                        isAlreadyBanner ? 'border-amber-400 bg-amber-50/20' : 'border-slate-200 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        {imageSrc ? (
+                          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                            <img 
+                              src={imageSrc} 
+                              alt={post.title || 'Imagem do Post'} 
+                              className="w-full h-full object-cover" 
+                            />
+                          </div>
+                        ) : null}
+
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-extrabold text-sm text-slate-800 line-clamp-2">
+                            {post.title || post.titulo || `Post de ${post.city || 'Cidadão'}`}
+                          </h4>
+                          {isAlreadyBanner && (
+                            <span className="flex-shrink-0 inline-flex items-center gap-1 bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Banner
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-600 line-clamp-3">
+                          {post.description || post.conteudo || post.content || 'Sem descrição.'}
+                        </p>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono text-slate-400 truncate max-w-[100px]">
+                          ID: {postId}
+                        </span>
+
+                        <button
+                          type="button"
+                          disabled={isAlreadyBanner || updatingBannerId === postId}
+                          onClick={() => handleUpdatePostToBanner(postId)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isAlreadyBanner
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default'
+                              : 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm disabled:opacity-50'
+                          }`}
+                        >
+                          {updatingBannerId === postId ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Promovendo...</span>
+                            </>
+                          ) : isAlreadyBanner ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>Banner Ativo</span>
+                            </>
+                          ) : (
+                            <>
+                              <Star className="w-3.5 h-3.5" />
+                              <span>Adicionar como banner destaque</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* =================================================================== */}
-        {/* SEÇÃO 2: GERENCIAMENTO DE PLANOS */}
+        {/* SEÇÃO 3: GERENCIAMENTO DE PLANOS */}
         {/* =================================================================== */}
         <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -462,7 +615,6 @@ const GerenciadorHome = () => {
             </span>
           </div>
 
-          {/* Form de Criação de Planos */}
           <form onSubmit={handleCreatePlan} className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -491,7 +643,6 @@ const GerenciadorHome = () => {
               </div>
             </div>
 
-            {/* Adição Dinâmica de Benefícios */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-700 block">Benefícios do Plano</label>
               
@@ -513,7 +664,6 @@ const GerenciadorHome = () => {
                 </button>
               </div>
 
-              {/* Lista de tags de benefícios */}
               {planBenefits.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-2">
                   {planBenefits.map((benefit, idx) => (
@@ -557,7 +707,6 @@ const GerenciadorHome = () => {
             </div>
           </form>
 
-          {/* Listagem de Planos */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-700">Planos Ativos</h3>
 

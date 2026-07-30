@@ -28,7 +28,8 @@ import {
   CreditCard,
   Check,
   Sparkles,
-  Video
+  Video,
+  Star
 } from 'lucide-react';
 import { Map, useMap } from '@vis.gl/react-google-maps';
 
@@ -249,6 +250,9 @@ const HomePage = () => {
     fetchPlans();
   }, []);
 
+  // Filtrar posts promovidos a banner (isBanner === true)
+  const bannerPosts = posts.filter((p) => Boolean(p.isBanner));
+
   const handleOpenPostDetails = (post) => {
     if (post.isMidiaHome) return; // Mídias institucionais não possuem modal de restrição Master
     setActionType('post');
@@ -465,18 +469,22 @@ const HomePage = () => {
             Acompanhe e notifique o seu município em <span className="text-green-600 underline decoration-green-500/30">tempo real</span>.
           </h2>
 
-          {/* Seção Exibição de Mídias Home Organizadas Horizontalmente */}
-          {loadingMidias ? (
+          {/* =================================================================== */}
+          {/* EXIBIÇÃO DE MÍDIAS DA HOME E POSTS COM isBanner = true */}
+          {/* =================================================================== */}
+          {(loadingMidias || loadingPosts) ? (
             <div className="flex items-center justify-center gap-2 py-4">
               <Loader2 className="w-5 h-5 animate-spin text-green-600" />
-              <span className="text-xs text-slate-500 font-medium">Carregando mídias...</span>
+              <span className="text-xs text-slate-500 font-medium">Carregando destaques e banners...</span>
             </div>
-          ) : midias.length > 0 && (
-            <div className="pt-4">
+          ) : (midias.length > 0 || bannerPosts.length > 0) && (
+            <div className="pt-4 space-y-3">
               <div className="flex items-center justify-start sm:justify-center gap-4 overflow-x-auto py-2 px-1 max-w-full scrollbar-thin">
+                
+                {/* 1. Mídias da Home Cadastradas */}
                 {midias.map((midia, index) => (
                   <div 
-                    key={midia._id || index}
+                    key={midia._id || `midia-${index}`}
                     className="flex-shrink-0 w-64 sm:w-72 h-44 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-black flex items-center justify-center group relative"
                   >
                     {midia.isImage ? (
@@ -492,8 +500,56 @@ const HomePage = () => {
                         className="w-full h-full object-cover" 
                       />
                     )}
+                    <span className="absolute top-2 left-2 text-[10px] font-bold bg-blue-600/90 text-white px-2 py-0.5 rounded-full border border-blue-400/30 shadow-md">
+                      Mídia Oficial
+                    </span>
                   </div>
                 ))}
+
+                {/* 2. Posts em Destaque promovidos como Banner (isBanner: true) */}
+                {bannerPosts.map((post) => {
+                  const postId = post._id || post.id;
+                  const imageSrc = (post.photos && post.photos.length > 0)
+                    ? (Array.isArray(post.photos) ? post.photos[0] : post.photos)
+                    : (post.imageUrl || post.url || post.midiaUrl);
+
+                  return (
+                    <div 
+                      key={postId}
+                      onClick={() => handleOpenPostDetails(post)}
+                      className="flex-shrink-0 w-64 sm:w-72 h-44 rounded-2xl overflow-hidden border-2 border-amber-400 shadow-lg bg-slate-900 flex flex-col justify-between p-3.5 group relative cursor-pointer hover:border-amber-300 transition-all text-white"
+                    >
+                      {imageSrc && (
+                        <img 
+                          src={imageSrc} 
+                          alt={post.title || 'Post Banner'} 
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-60" 
+                        />
+                      )}
+
+                      <div className="relative z-10 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-500 text-slate-950 px-2.5 py-0.5 rounded-full shadow-md">
+                          <Star className="w-3 h-3 fill-slate-950 text-slate-950" /> Banner Destaque
+                        </span>
+                        {post.city && (
+                          <span className="text-[10px] font-semibold bg-black/60 text-white px-2 py-0.5 rounded-full backdrop-blur-md">
+                            {post.city}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="relative z-10 text-left space-y-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2 rounded-xl">
+                        <h4 className="text-xs font-black line-clamp-1 text-white">
+                          {post.title || post.titulo || `Destaque: ${post.city || 'Notícia'}`}
+                        </h4>
+                        <p className="text-[11px] text-slate-200 line-clamp-2 leading-tight">
+                          {post.description || post.conteudo || 'Clique para visualizar mais detalhes.'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+
               </div>
             </div>
           )}
@@ -570,11 +626,15 @@ const HomePage = () => {
                 }
 
                 // Item de Postagem de Usuário
+                const isBannerPost = Boolean(item.isBanner);
+
                 return (
                   <div 
                     key={item._id || item.id}
                     onClick={() => handleOpenPostDetails(item)}
-                    className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col sm:flex-row gap-5 justify-between items-start sm:items-center group cursor-pointer"
+                    className={`bg-white rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-5 justify-between items-start sm:items-center group cursor-pointer ${
+                      isBannerPost ? 'border-amber-400 bg-amber-50/10 hover:border-amber-500' : 'border-slate-200 hover:border-slate-300'
+                    }`}
                   >
                     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-1 w-full">
                       {item.photos && (Array.isArray(item.photos) ? item.photos.length > 0 : typeof item.photos === 'string') && (
@@ -588,10 +648,15 @@ const HomePage = () => {
                       )}
 
                       <div className="space-y-2 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] font-bold bg-green-100 text-green-800 px-2.5 py-0.5 rounded-full border border-green-200">
                             Postagem de Cidadão
                           </span>
+                          {isBannerPost && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full">
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Banner Destaque
+                            </span>
+                          )}
                           {item.city && (
                             <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
                               <MapPin className="w-3 h-3 text-slate-400" /> {item.city}
@@ -654,7 +719,7 @@ const HomePage = () => {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h4 className="text-lg font-bold text-slate-800 group-hover:text-green-700 transition-colors">
-                        {plan.title}
+                        {plan.title || plan.name}
                       </h4>
                       <Sparkles className="w-5 h-5 text-yellow-500" />
                     </div>
