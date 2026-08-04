@@ -125,7 +125,6 @@ const CustomHtmlMarker = ({ map, position }) => {
         
         const bounds = map.getBounds();
         if (bounds) {
-          // CORREÇÃO: Monta o ponto Noroeste (Top-Left) combinando a latitude máxima (Norte) com a longitude mínima (Oeste)
           const nwLatLng = new window.google.maps.LatLng(
             bounds.getNorthEast().lat(),
             bounds.getSouthWest().lng()
@@ -142,7 +141,6 @@ const CustomHtmlMarker = ({ map, position }) => {
       }
     };
 
-    // Escuta mudanças de movimentação do mapa para manter o marcador fixado no local correto da tela
     const listeners = [
       map.addListener('bounds_changed', updatePosition),
       map.addListener('zoom_changed', updatePosition),
@@ -190,6 +188,7 @@ const Dashboard = () => {
   });
 
   const [managedAreas, setManagedAreas] = useState([]);
+  const [pagesOptions, setPagesOptions] = useState([]); // Guarda as opções vindas de /pages
   const [areasLoading, setAreasLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -204,8 +203,24 @@ const Dashboard = () => {
     setNewPost(prev => ({ ...prev, protocol: randomNum }));
   };
 
+  // Buscar Páginas registradas na rota GET /pages
+  const fetchPages = async () => {
+    try {
+      const response = await fetch('https://cidadeemdia.onrender.com/pages');
+      if (response.ok) {
+        const pagesList = await response.json();
+        // Extrai nomes formatados ou áreas gerencidadas das páginas
+        const pagesData = pagesList.map(page => page.tittle || page.managedArea).filter(Boolean);
+        setPagesOptions(pagesData);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar páginas:', error);
+    }
+  };
+
   useEffect(() => {
     fetchPosts();
+    fetchPages();
     generateRandomProtocol();
   }, []);
 
@@ -234,6 +249,11 @@ const Dashboard = () => {
 
     return () => clearTimeout(delayDebounceFn);
   }, [newPost.city]);
+
+  // Combina as áreas buscadas por cidade + as páginas gerais recebidas da rota /pages
+  const combinedShareOptions = Array.from(
+    new Set([...managedAreas, ...pagesOptions])
+  );
 
   const handleSearchAddressOnMap = () => {
     setBuscarEnderecoTrigger({
@@ -455,7 +475,6 @@ const Dashboard = () => {
                 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    {/* Campo de CEP alterado para opcional (sem a tag 'required') */}
                     <label className="text-[10px] font-bold text-slate-500 uppercase">CEP (Opcional)</label>
                     <input
                       type="text"
@@ -515,15 +534,15 @@ const Dashboard = () => {
                     required
                     value={newPost.managedArea}
                     onChange={handleInputChange}
-                    disabled={managedAreas.length === 0 || areasLoading}
+                    disabled={combinedShareOptions.length === 0 || areasLoading}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-xs disabled:bg-slate-100 disabled:text-slate-400 transition-colors"
                   >
-                    {managedAreas.length === 0 ? (
-                      <option value="">{newPost.city ? 'Nenhuma opção disponível nesta cidade' : 'Digite a cidade primeiro...'}</option>
+                    {combinedShareOptions.length === 0 ? (
+                      <option value="">Nenhuma opção disponível...</option>
                     ) : (
                       <>
                         <option value="">Selecione uma opção...</option>
-                        {managedAreas.map((area, index) => (
+                        {combinedShareOptions.map((area, index) => (
                           <option key={index} value={area}>{area}</option>
                         ))}
                       </>
